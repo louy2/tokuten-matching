@@ -2,54 +2,6 @@ import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import { env } from "cloudflare:test";
 import { users, parties, partyMembers, characterClaims } from "../../db/schema";
 
-// Migration SQL — must match drizzle/0000_big_maximus.sql
-const MIGRATION_SQL = `
-CREATE TABLE IF NOT EXISTS users (
-  id text PRIMARY KEY NOT NULL,
-  display_name text NOT NULL,
-  avatar_url text,
-  oauth_provider text NOT NULL,
-  oauth_id text NOT NULL,
-  languages text DEFAULT '[]' NOT NULL,
-  payment_methods text DEFAULT '[]' NOT NULL,
-  created_at integer NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS parties (
-  id text PRIMARY KEY NOT NULL,
-  name text NOT NULL,
-  description text,
-  leader_id text NOT NULL,
-  status text DEFAULT 'open' NOT NULL,
-  group_chat_link text,
-  language text DEFAULT 'ja' NOT NULL,
-  auto_promote_date text DEFAULT '2026-05-08',
-  created_at integer NOT NULL,
-  FOREIGN KEY (leader_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS party_members (
-  party_id text NOT NULL,
-  user_id text NOT NULL,
-  joined_at integer NOT NULL,
-  PRIMARY KEY(party_id, user_id),
-  FOREIGN KEY (party_id) REFERENCES parties(id),
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS character_claims (
-  id text PRIMARY KEY NOT NULL,
-  party_id text NOT NULL,
-  character_id integer NOT NULL,
-  user_id text NOT NULL,
-  claim_type text NOT NULL,
-  rank integer,
-  created_at integer NOT NULL,
-  FOREIGN KEY (party_id) REFERENCES parties(id),
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
-`;
-
 let _id = 0;
 export function nextId(prefix = "id") {
   return `${prefix}-${++_id}`;
@@ -64,14 +16,9 @@ export function getDb(): DrizzleD1Database {
   return drizzle(env.DB);
 }
 
-/** Run migrations and clear all tables. Call in beforeEach. */
+/** Clear all tables. Migrations are applied by the setup file. */
 export async function setupDb(): Promise<DrizzleD1Database> {
   const db = getDb();
-
-  // Run migrations (IF NOT EXISTS makes this idempotent)
-  for (const stmt of MIGRATION_SQL.split(";").filter((s) => s.trim())) {
-    await env.DB.prepare(stmt).run();
-  }
 
   // Clear tables in correct order (foreign keys)
   await db.delete(characterClaims);
