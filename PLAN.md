@@ -35,7 +35,7 @@ The tool tracks preferences, records claims, shows cost splits, and helps party 
 - leader_id → User
 - status: open | locked
 - group_chat_link: string (optional, LINE/Discord/etc.)
-- language: string (primary language)
+- languages: string[] (ja, en, zh — party can accept multiple)
 - created_at
 - auto_promote_date: date (default: May 8, 2026)
 

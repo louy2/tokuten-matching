@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "91cb42b2-5021-40b8-91c3-8be54910e3c6",
+  "id": "eb8b2892-6fb0-4db5-816a-50ca08dd4ed9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "character_claims": {
@@ -136,13 +136,13 @@
           "notNull": false,
           "autoincrement": false
         },
-        "language": {
-          "name": "language",
+        "languages": {
+          "name": "languages",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'ja'"
+          "default": "'[\"ja\"]'"
         },
         "auto_promote_date": {
           "name": "auto_promote_date",

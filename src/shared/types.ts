@@ -16,7 +16,7 @@ export interface UserProfile {
 export interface PartyListItem {
   id: string;
   name: string;
-  language: string;
+  languages: Language[];
   memberCount: number;
   openSlots: number;
   contestedCount: number;
@@ -30,7 +30,7 @@ export interface PartyDetail {
   leaderId: string;
   status: PartyStatus;
   groupChatLink: string | null;
-  language: string;
+  languages: Language[];
   autoPromoteDate: string | null;
   members: PartyMember[];
   claims: CharacterClaimView[];

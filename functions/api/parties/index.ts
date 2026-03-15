@@ -10,7 +10,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   let query = `
     SELECT
-      p.id, p.name, p.language, p.created_at,
+      p.id, p.name, p.languages, p.created_at,
       COUNT(DISTINCT pm.user_id) as member_count
     FROM parties p
     LEFT JOIN party_members pm ON pm.party_id = p.id
@@ -19,7 +19,8 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   const params: string[] = [];
 
   if (language) {
-    query += " AND p.language = ?";
+    query +=
+      " AND EXISTS (SELECT 1 FROM json_each(p.languages) WHERE json_each.value = ?)";
     params.push(language);
   }
 

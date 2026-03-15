@@ -20,7 +20,7 @@ export const parties = sqliteTable("parties", {
     .references(() => users.id),
   status: text("status").notNull().default("open"), // "open" | "locked"
   groupChatLink: text("group_chat_link"),
-  language: text("language").notNull().default("ja"),
+  languages: text("languages").notNull().default('["ja"]'), // JSON array: ["ja","en","zh"]
   autoPromoteDate: text("auto_promote_date").default("2026-05-08"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });

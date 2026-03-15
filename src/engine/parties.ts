@@ -8,7 +8,7 @@ import { SET_PRICE_YEN } from "../shared/characters";
 export interface BrowsePartyRow {
   id: string;
   name: string;
-  language: string;
+  languages: string[];
   status: string;
   groupChatLink: string | null;
   createdAt: Date;
@@ -19,7 +19,7 @@ export interface BrowsePartyRow {
 interface RawBrowseRow {
   id: string;
   name: string;
-  language: string;
+  languages: string;
   status: string;
   group_chat_link: string | null;
   created_at: number;
@@ -34,7 +34,7 @@ export async function listOpenParties(
 ): Promise<BrowsePartyRow[]> {
   let query = `
     SELECT
-      p.id, p.name, p.language, p.status, p.group_chat_link, p.created_at,
+      p.id, p.name, p.languages, p.status, p.group_chat_link, p.created_at,
       (SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = p.id) AS member_count,
       (SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = p.id AND cc.claim_type = 'claimed') AS claimed_count
     FROM parties p
@@ -43,7 +43,8 @@ export async function listOpenParties(
   const params: string[] = [];
 
   if (filter?.language) {
-    query += " AND p.language = ?";
+    // Match if the filter language appears anywhere in the JSON array
+    query += " AND EXISTS (SELECT 1 FROM json_each(p.languages) WHERE json_each.value = ?)";
     params.push(filter.language);
   }
 
@@ -54,7 +55,7 @@ export async function listOpenParties(
   return raw.results.map((r) => ({
     id: r.id,
     name: r.name,
-    language: r.language,
+    languages: JSON.parse(r.languages) as string[],
     status: r.status,
     groupChatLink: r.group_chat_link,
     createdAt: new Date(r.created_at * 1000),

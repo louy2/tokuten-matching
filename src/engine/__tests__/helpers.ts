@@ -55,7 +55,7 @@ export async function insertParty(
     name?: string;
     leaderId: string;
     status?: string;
-    language?: string;
+    languages?: string[];
     groupChatLink?: string | null;
     autoPromoteDate?: string | null;
   },
@@ -66,7 +66,7 @@ export async function insertParty(
     name: overrides.name ?? `Party ${pid}`,
     leaderId: overrides.leaderId,
     status: overrides.status ?? "open",
-    language: overrides.language ?? "ja",
+    languages: JSON.stringify(overrides.languages ?? ["ja"]),
     groupChatLink: overrides.groupChatLink ?? null,
     autoPromoteDate: overrides.autoPromoteDate ?? "2026-05-08",
     createdAt: new Date(),

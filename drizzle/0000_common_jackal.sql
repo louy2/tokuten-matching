@@ -17,7 +17,7 @@ CREATE TABLE `parties` (
 	`leader_id` text NOT NULL,
 	`status` text DEFAULT 'open' NOT NULL,
 	`group_chat_link` text,
-	`language` text DEFAULT 'ja' NOT NULL,
+	`languages` text DEFAULT '["ja"]' NOT NULL,
 	`auto_promote_date` text DEFAULT '2026-05-08',
 	`created_at` integer NOT NULL,
 	FOREIGN KEY (`leader_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
