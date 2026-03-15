@@ -150,22 +150,22 @@ The tool tracks preferences, records claims, shows cost splits, and helps party 
 
 ## Tech Stack
 
-- **Framework**: Remix (React, runs natively on Cloudflare Workers)
+- **Framework**: React Router v7 (successor to Remix, runs natively on Cloudflare Pages Functions)
 - **Language**: TypeScript
 - **Database**: Cloudflare D1 (SQLite-based, serverless) via Drizzle ORM
 - **Auth**: Custom OAuth flow on Workers (Google + Discord providers)
 - **Styling**: Tailwind CSS (mobile-first)
-- **Deployment**: Cloudflare Pages (static + Workers for SSR/API)
+- **Deployment**: Cloudflare Pages (single deploy: static assets + Pages Functions for SSR/API)
 - **Sessions**: Cloudflare KV for session storage
-- **i18n**: remix-i18next (ja/en/zh)
+- **i18n**: react-router-i18next or i18next (ja/en/zh)
 
 ## Implementation Phases
 
 ### Phase 1: Foundation
-1. Initialize Remix project with TypeScript + Tailwind + Cloudflare Pages template
+1. Initialize React Router v7 project with TypeScript + Tailwind + Cloudflare Pages template
 2. Set up Drizzle ORM schema with Cloudflare D1
 3. Implement OAuth flow (Google + Discord) with KV session storage
-4. Set up remix-i18next with ja/en/zh
+4. Set up i18next with ja/en/zh
 5. Create base layout (mobile-first, responsive)
 
 ### Phase 2: Core Features
