@@ -64,8 +64,9 @@ describe("BUY — auto-promote claim logic (D1)", () => {
 
   it("promotes a lone conditional to claimed", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" });
-    const count = await autoPromote(db, PARTY);
-    expect(count).toBe(1);
+    const result = await autoPromote(db, PARTY);
+    expect(result.promotedCount).toBe(1);
+    expect(result.eventIds).toHaveLength(1);
 
     const slots = await resolveSlots(db, PARTY);
     expect(slots[0].state).toBe("claimed");
@@ -74,23 +75,26 @@ describe("BUY — auto-promote claim logic (D1)", () => {
 
   it("does not promote if character is already claimed", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
-    const count = await autoPromote(db, PARTY);
-    expect(count).toBe(0);
+    const result = await autoPromote(db, PARTY);
+    expect(result.promotedCount).toBe(0);
+    expect(result.eventIds).toHaveLength(0);
   });
 
   it("does not promote contested characters (2+ conditionals)", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "alice", claimType: "conditional" });
     await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "bob", claimType: "conditional" });
-    const count = await autoPromote(db, PARTY);
-    expect(count).toBe(0);
+    const result = await autoPromote(db, PARTY);
+    expect(result.promotedCount).toBe(0);
+    expect(result.eventIds).toHaveLength(0);
   });
 
   it("promotes multiple lone conditionals across different characters", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" });
     await insertClaim(db, { partyId: PARTY, characterId: 5, userId: "bob", claimType: "conditional" });
     await insertClaim(db, { partyId: PARTY, characterId: 9, userId: "carol", claimType: "conditional" });
-    const count = await autoPromote(db, PARTY);
-    expect(count).toBe(3);
+    const result = await autoPromote(db, PARTY);
+    expect(result.promotedCount).toBe(3);
+    expect(result.eventIds).toHaveLength(3);
 
     const slots = await resolveSlots(db, PARTY);
     expect(slots[0].state).toBe("claimed");
@@ -104,7 +108,8 @@ describe("BUY — auto-promote claim logic (D1)", () => {
     const slotsBefore = await resolveSlots(db, PARTY);
     expect(slotsBefore[0].state).toBe("conditional");
 
-    await autoPromote(db, PARTY);
+    const result = await autoPromote(db, PARTY);
+    expect(result.promotedCount).toBe(1);
 
     const slotsAfter = await resolveSlots(db, PARTY);
     expect(slotsAfter[0].state).toBe("claimed");

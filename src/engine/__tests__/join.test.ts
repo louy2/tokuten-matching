@@ -20,18 +20,21 @@ describe("JOIN — join a party", () => {
   });
 
   it("allows joining an open party", async () => {
-    const err = await joinParty(db, "p1", "bob");
-    expect(err).toBeNull();
+    const result = await joinParty(db, "p1", "bob");
+    expect(result.error).toBeNull();
+    expect(result.eventId).toBeDefined();
   });
 
   it("rejects joining a locked party", async () => {
-    const err = await joinParty(db, "p-locked", "bob");
-    expect(err).toBe("party_locked");
+    const result = await joinParty(db, "p-locked", "bob");
+    expect(result.error).toBe("party_locked");
+    expect(result.eventId).toBeUndefined();
   });
 
   it("rejects joining a party you are already in", async () => {
-    const err = await joinParty(db, "p1", "alice");
-    expect(err).toBe("already_a_member");
+    const result = await joinParty(db, "p1", "alice");
+    expect(result.error).toBe("already_a_member");
+    expect(result.eventId).toBeUndefined();
   });
 });
 

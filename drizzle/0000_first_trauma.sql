@@ -10,6 +10,18 @@ CREATE TABLE `character_claims` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE TABLE `events` (
+	`id` text PRIMARY KEY NOT NULL,
+	`party_id` text,
+	`user_id` text NOT NULL,
+	`type` text NOT NULL,
+	`payload` text NOT NULL,
+	`undone_at` integer,
+	`created_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `idx_events_party` ON `events` (`party_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_events_user` ON `events` (`user_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `parties` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,

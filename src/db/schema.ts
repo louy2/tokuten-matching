@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // nanoid
@@ -56,4 +56,21 @@ export const characterClaims = sqliteTable(
   },
   // No composite unique here — uniqueness rules are enforced in application logic
   // because they differ by claim_type (see PLAN.md Key Rules)
+);
+
+export const events = sqliteTable(
+  "events",
+  {
+    id: text("id").primaryKey(),
+    partyId: text("party_id"), // nullable — some events may be system-level
+    userId: text("user_id").notNull(),
+    type: text("type").notNull(),
+    payload: text("payload").notNull(), // JSON blob
+    undoneAt: integer("undone_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("idx_events_party").on(table.partyId, table.createdAt),
+    index("idx_events_user").on(table.userId, table.createdAt),
+  ],
 );

@@ -1,6 +1,6 @@
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import { env } from "cloudflare:test";
-import { users, parties, partyMembers, characterClaims } from "../../db/schema";
+import { users, parties, partyMembers, characterClaims, events } from "../../db/schema";
 
 let _id = 0;
 export function nextId(prefix = "id") {
@@ -21,6 +21,7 @@ export async function setupDb(): Promise<DrizzleD1Database> {
   const db = getDb();
 
   // Clear tables in correct order (foreign keys)
+  await db.delete(events);
   await db.delete(characterClaims);
   await db.delete(partyMembers);
   await db.delete(parties);
@@ -110,4 +111,30 @@ export async function insertClaim(
     createdAt: new Date(),
   });
   return cid;
+}
+
+/** Insert a test event and return its ID. */
+export async function insertEvent(
+  db: DrizzleD1Database,
+  overrides: {
+    id?: string;
+    partyId: string | null;
+    userId: string;
+    type: string;
+    payload?: Record<string, unknown>;
+    createdAt?: Date;
+    undoneAt?: Date | null;
+  },
+): Promise<string> {
+  const eid = overrides.id ?? nextId("evt");
+  await db.insert(events).values({
+    id: eid,
+    partyId: overrides.partyId,
+    userId: overrides.userId,
+    type: overrides.type,
+    payload: JSON.stringify(overrides.payload ?? {}),
+    createdAt: overrides.createdAt ?? new Date(),
+    undoneAt: overrides.undoneAt ?? null,
+  });
+  return eid;
 }

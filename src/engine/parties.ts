@@ -2,6 +2,7 @@ import { eq, and, ne } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { parties, partyMembers } from "../db/schema";
 import { SET_PRICE_YEN } from "../shared/characters";
+import { appendEvent } from "./events";
 
 // ─── Browse / Filter ───────────────────────────────────────
 
@@ -68,19 +69,24 @@ export async function listOpenParties(
 
 export type JoinError = "party_locked" | "already_a_member" | "party_not_found";
 
+export interface JoinResult {
+  error: JoinError | null;
+  eventId?: string;
+}
+
 export async function joinParty(
   db: DrizzleD1Database,
   partyId: string,
   userId: string,
-): Promise<JoinError | null> {
+): Promise<JoinResult> {
   const party = await db
     .select({ status: parties.status })
     .from(parties)
     .where(eq(parties.id, partyId))
     .get();
 
-  if (!party) return "party_not_found";
-  if (party.status === "locked") return "party_locked";
+  if (!party) return { error: "party_not_found" };
+  if (party.status === "locked") return { error: "party_locked" };
 
   const existing = await db
     .select()
@@ -89,7 +95,7 @@ export async function joinParty(
       and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, userId)),
     )
     .get();
-  if (existing) return "already_a_member";
+  if (existing) return { error: "already_a_member" };
 
   await db.insert(partyMembers).values({
     partyId,
@@ -97,7 +103,15 @@ export async function joinParty(
     joinedAt: new Date(),
   });
 
-  return null;
+  const eventId = await appendEvent(db, {
+    id: `evt-join-${partyId}-${userId}-${Date.now()}`,
+    partyId,
+    userId,
+    type: "member_joined",
+    payload: { partyId, userId },
+  });
+
+  return { error: null, eventId };
 }
 
 // ─── Multi-party transparency ──────────────────────────────

@@ -2,6 +2,7 @@ import { eq, and } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { characterClaims, parties, partyMembers } from "../db/schema";
 import type { ClaimType } from "../shared/types";
+import { appendEvent } from "./events";
 
 /**
  * The resolved state of a single character slot within a party.
@@ -152,19 +153,27 @@ export async function validateClaim(
 
 // ─── Mutations ─────────────────────────────────────────────
 
+export interface PlaceClaimResult {
+  claimId: string;
+  eventIds: string[];
+}
+
 /**
  * Place a claim after validation. Displaces conditionals when a full claim
- * is placed. Returns the new claim ID.
+ * is placed. Dual-writes events for each side effect.
  */
 export async function placeClaim(
   db: DrizzleD1Database,
   partyId: string,
   claim: { id: string; userId: string; characterId: number; claimType: ClaimType; rank: number | null },
-): Promise<string> {
+): Promise<PlaceClaimResult> {
+  const eventIds: string[] = [];
+
   // If full-claiming, displace any conditional on this character
   if (claim.claimType === "claimed") {
-    await db
-      .delete(characterClaims)
+    const displaced = await db
+      .select()
+      .from(characterClaims)
       .where(
         and(
           eq(characterClaims.partyId, partyId),
@@ -172,6 +181,23 @@ export async function placeClaim(
           eq(characterClaims.claimType, "conditional"),
         ),
       );
+
+    for (const d of displaced) {
+      await db.delete(characterClaims).where(eq(characterClaims.id, d.id));
+      const eid = await appendEvent(db, {
+        id: `evt-displaced-${d.id}`,
+        partyId,
+        userId: claim.userId,
+        type: "claim_displaced",
+        payload: {
+          displacedClaimId: d.id,
+          displacedUserId: d.userId,
+          characterId: claim.characterId,
+          byUserId: claim.userId,
+        },
+      });
+      eventIds.push(eid);
+    }
   }
 
   await db.insert(characterClaims).values({
@@ -184,39 +210,76 @@ export async function placeClaim(
     createdAt: new Date(),
   });
 
-  return claim.id;
+  const eid = await appendEvent(db, {
+    id: `evt-claim-${claim.id}`,
+    partyId,
+    userId: claim.userId,
+    type: "claim_placed",
+    payload: {
+      claimId: claim.id,
+      characterId: claim.characterId,
+      claimType: claim.claimType,
+      rank: claim.rank,
+    },
+  });
+  eventIds.push(eid);
+
+  return { claimId: claim.id, eventIds };
+}
+
+export interface AutoPromoteResult {
+  promotedCount: number;
+  eventIds: string[];
 }
 
 /**
  * Auto-promote: for each character with exactly one conditional and no
  * "claimed", promote that conditional to "claimed".
- * Returns the count of promoted claims.
+ * Dual-writes a claim_promoted event for each promotion.
  */
 export async function autoPromote(
   db: DrizzleD1Database,
   partyId: string,
-): Promise<number> {
+): Promise<AutoPromoteResult> {
   const claims = await db
     .select()
     .from(characterClaims)
     .where(eq(characterClaims.partyId, partyId));
 
-  const toPromote: string[] = [];
+  const toPromote: { id: string; userId: string; characterId: number }[] = [];
   for (let charId = 1; charId <= 12; charId++) {
     const forChar = claims.filter((c) => c.characterId === charId);
     const hasClaimed = forChar.some((c) => c.claimType === "claimed");
     const conditionals = forChar.filter((c) => c.claimType === "conditional");
     if (!hasClaimed && conditionals.length === 1) {
-      toPromote.push(conditionals[0].id);
+      toPromote.push({
+        id: conditionals[0].id,
+        userId: conditionals[0].userId,
+        characterId: charId,
+      });
     }
   }
 
-  for (const claimId of toPromote) {
+  const eventIds: string[] = [];
+  for (const claim of toPromote) {
     await db
       .update(characterClaims)
       .set({ claimType: "claimed" })
-      .where(eq(characterClaims.id, claimId));
+      .where(eq(characterClaims.id, claim.id));
+
+    const eid = await appendEvent(db, {
+      id: `evt-promoted-${claim.id}`,
+      partyId,
+      userId: claim.userId,
+      type: "claim_promoted",
+      payload: {
+        claimId: claim.id,
+        characterId: claim.characterId,
+        userId: claim.userId,
+      },
+    });
+    eventIds.push(eid);
   }
 
-  return toPromote.length;
+  return { promotedCount: toPromote.length, eventIds };
 }
