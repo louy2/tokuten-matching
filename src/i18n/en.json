@@ -1,0 +1,21 @@
+{
+  "appName": "Tokuten Matching",
+  "nav": {
+    "parties": "Parties",
+    "myParties": "My Parties"
+  },
+  "home": {
+    "description": "Find a group to split-buy the Nijigasaki tokuten set. Share a ¥21,600 set among up to 12 fans.",
+    "findParty": "Find a Party",
+    "createParty": "Create a Party"
+  },
+  "party": {
+    "detail": "Party Detail"
+  },
+  "profile": {
+    "title": "Profile"
+  },
+  "common": {
+    "comingSoon": "Coming soon…"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "appName": "特典マッチング",
+  "nav": {
+    "parties": "パーティー一覧",
+    "myParties": "マイパーティー"
+  },
+  "home": {
+    "description": "ニジガク特典セットの共同購入パーティーを見つけよう。12人で¥21,600のセットを分け合えます。",
+    "findParty": "パーティーを探す",
+    "createParty": "パーティーを作る"
+  },
+  "party": {
+    "detail": "パーティー詳細"
+  },
+  "profile": {
+    "title": "プロフィール"
+  },
+  "common": {
+    "comingSoon": "準備中…"
+  }
+}

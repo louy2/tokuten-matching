@@ -150,23 +150,40 @@ The tool tracks preferences, records claims, shows cost splits, and helps party 
 
 ## Tech Stack
 
-- **Framework**: React Router v7 (successor to Remix, runs natively on Cloudflare Pages Functions)
+- **Frontend**: Vite + React SPA (client-side only, no SSR)
+- **API**: Cloudflare Pages Functions (file-based routing under `/functions/api/`)
 - **Language**: TypeScript
 - **Database**: Cloudflare D1 (SQLite-based, serverless) via Drizzle ORM
-- **Auth**: Custom OAuth flow on Workers (Google + Discord providers)
+- **Auth**: Custom OAuth flow via Pages Functions (Google + Discord providers)
 - **Styling**: Tailwind CSS (mobile-first)
-- **Deployment**: Cloudflare Pages (single deploy: static assets + Pages Functions for SSR/API)
+- **Deployment**: Cloudflare Pages (static SPA assets + Pages Functions for API)
 - **Sessions**: Cloudflare KV for session storage
-- **i18n**: react-router-i18next or i18next (ja/en/zh)
+- **Routing**: React Router (client-side only, as a library — not the framework mode)
+- **i18n**: i18next + react-i18next (ja/en/zh)
+
+### Architecture: SPA + API
+
+The frontend is a plain Vite React SPA served as static files by Cloudflare Pages.
+The backend is a set of JSON API endpoints under `/functions/api/` powered by
+Cloudflare Pages Functions. This avoids SSR complexity — the app is a fan tool
+behind auth, not a content site that needs SEO.
+
+```
+/                         → Vite SPA (index.html, client-side routing)
+/functions/api/auth/*     → OAuth endpoints (login, callback, logout, me)
+/functions/api/parties/*  → Party CRUD + claim endpoints
+/functions/api/users/*    → User profile endpoints
+```
 
 ## Implementation Phases
 
 ### Phase 1: Foundation
-1. Initialize React Router v7 project with TypeScript + Tailwind + Cloudflare Pages template
-2. Set up Drizzle ORM schema with Cloudflare D1
-3. Implement OAuth flow (Google + Discord) with KV session storage
-4. Set up i18next with ja/en/zh
-5. Create base layout (mobile-first, responsive)
+1. Initialize Vite + React + TypeScript project with Tailwind CSS
+2. Set up Cloudflare Pages config (wrangler.toml) with D1 + KV bindings
+3. Set up Drizzle ORM schema with Cloudflare D1
+4. Implement OAuth flow (Google + Discord) via Pages Functions with KV session storage
+5. Set up i18next with ja/en/zh
+6. Create base layout with client-side routing (mobile-first, responsive)
 
 ### Phase 2: Core Features
 6. Implement User profile (languages, payment methods)

@@ -1,0 +1,21 @@
+{
+  "appName": "特典配对",
+  "nav": {
+    "parties": "队伍列表",
+    "myParties": "我的队伍"
+  },
+  "home": {
+    "description": "寻找虹咲特典套装的拼购队伍。12人分摊¥21,600的套装。",
+    "findParty": "寻找队伍",
+    "createParty": "创建队伍"
+  },
+  "party": {
+    "detail": "队伍详情"
+  },
+  "profile": {
+    "title": "个人资料"
+  },
+  "common": {
+    "comingSoon": "即将推出…"
+  }
+}
