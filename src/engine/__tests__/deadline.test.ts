@@ -1,17 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { findAutoPromotable, resolveSlots, type Claim } from "../claims";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import { autoPromote, resolveSlots } from "../claims";
 import { costPerPerson, daysUntilDeadline, isAutoPromoteDue } from "../parties";
-import { makeClaim, resetIds } from "./helpers";
+import { setupDb, insertUser, insertParty, insertMember, insertClaim } from "./helpers";
 
 // ─── Phase 5: BUY — May 15 deadline ───────────────────────
 
-const PARTY = "party-1";
+const PARTY = "p1";
 
 describe("BUY — countdown to May 15", () => {
   it("counts days correctly from 2 months out", () => {
     const march15 = new Date("2026-03-15T12:00:00+09:00");
     const days = daysUntilDeadline(march15);
-    expect(days).toBe(61); // Mar 15 → May 15 = 61 days
+    expect(days).toBe(61);
   });
 
   it("counts 0 days on or after May 15", () => {
@@ -46,74 +47,78 @@ describe("BUY — auto-promote deadline", () => {
   });
 });
 
-describe("BUY — auto-promote claim logic", () => {
-  let claims: Claim[];
+describe("BUY — auto-promote claim logic (D1)", () => {
+  let db: DrizzleD1Database;
 
-  beforeEach(() => {
-    resetIds();
-    claims = [];
+  beforeEach(async () => {
+    db = await setupDb();
+    await insertUser(db, "leader");
+    await insertUser(db, "alice");
+    await insertUser(db, "bob");
+    await insertUser(db, "carol");
+    await insertParty(db, { id: PARTY, leaderId: "leader" });
+    await insertMember(db, PARTY, "alice");
+    await insertMember(db, PARTY, "bob");
+    await insertMember(db, PARTY, "carol");
   });
 
-  it("promotes a lone conditional to claimed", () => {
-    claims.push(
-      makeClaim({ partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" }),
-    );
-    const toPromote = findAutoPromotable(claims);
-    expect(toPromote).toHaveLength(1);
-  });
+  it("promotes a lone conditional to claimed", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" });
+    const count = await autoPromote(db, PARTY);
+    expect(count).toBe(1);
 
-  it("does not promote if character is already claimed", () => {
-    claims.push(
-      makeClaim({ partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" }),
-    );
-    const toPromote = findAutoPromotable(claims);
-    expect(toPromote).toHaveLength(0);
-  });
-
-  it("does not promote contested characters (2+ conditionals)", () => {
-    claims.push(
-      makeClaim({ partyId: PARTY, characterId: 2, userId: "alice", claimType: "conditional" }),
-      makeClaim({ partyId: PARTY, characterId: 2, userId: "bob", claimType: "conditional" }),
-    );
-    const toPromote = findAutoPromotable(claims);
-    expect(toPromote).toHaveLength(0);
-  });
-
-  it("promotes multiple lone conditionals across different characters", () => {
-    claims.push(
-      makeClaim({ id: "c1", partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" }),
-      makeClaim({ id: "c2", partyId: PARTY, characterId: 5, userId: "bob", claimType: "conditional" }),
-      makeClaim({ id: "c3", partyId: PARTY, characterId: 9, userId: "carol", claimType: "conditional" }),
-    );
-    const toPromote = findAutoPromotable(claims);
-    expect(toPromote).toEqual(["c1", "c2", "c3"]);
-  });
-
-  it("after promotion, slot state changes from conditional to claimed", () => {
-    claims.push(
-      makeClaim({ partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" }),
-    );
-
-    // Simulate promotion by changing claim type
-    const promoted: Claim[] = claims.map((c) =>
-      findAutoPromotable(claims).includes(c.id)
-        ? { ...c, claimType: "claimed" as const }
-        : c,
-    );
-
-    const slots = resolveSlots(promoted);
+    const slots = await resolveSlots(db, PARTY);
     expect(slots[0].state).toBe("claimed");
     expect(slots[0].claimedBy).toBe("alice");
+  });
+
+  it("does not promote if character is already claimed", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
+    const count = await autoPromote(db, PARTY);
+    expect(count).toBe(0);
+  });
+
+  it("does not promote contested characters (2+ conditionals)", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "alice", claimType: "conditional" });
+    await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "bob", claimType: "conditional" });
+    const count = await autoPromote(db, PARTY);
+    expect(count).toBe(0);
+  });
+
+  it("promotes multiple lone conditionals across different characters", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" });
+    await insertClaim(db, { partyId: PARTY, characterId: 5, userId: "bob", claimType: "conditional" });
+    await insertClaim(db, { partyId: PARTY, characterId: 9, userId: "carol", claimType: "conditional" });
+    const count = await autoPromote(db, PARTY);
+    expect(count).toBe(3);
+
+    const slots = await resolveSlots(db, PARTY);
+    expect(slots[0].state).toBe("claimed");
+    expect(slots[4].state).toBe("claimed");
+    expect(slots[8].state).toBe("claimed");
+  });
+
+  it("after promotion, slot state changes from conditional to claimed", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "conditional" });
+
+    const slotsBefore = await resolveSlots(db, PARTY);
+    expect(slotsBefore[0].state).toBe("conditional");
+
+    await autoPromote(db, PARTY);
+
+    const slotsAfter = await resolveSlots(db, PARTY);
+    expect(slotsAfter[0].state).toBe("claimed");
+    expect(slotsAfter[0].claimedBy).toBe("alice");
   });
 });
 
 describe("BUY — cost split", () => {
   it("splits evenly among members with claims", () => {
-    expect(costPerPerson(12)).toBe(1800); // ¥21,600 / 12 = ¥1,800
+    expect(costPerPerson(12)).toBe(1800);
   });
 
   it("rounds up for uneven splits", () => {
-    expect(costPerPerson(7)).toBe(3086); // ceil(21600/7) = 3086
+    expect(costPerPerson(7)).toBe(3086);
   });
 
   it("handles single buyer", () => {

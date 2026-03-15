@@ -1,15 +1,7 @@
+import { eq, and } from "drizzle-orm";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import { characterClaims, parties, partyMembers } from "../db/schema";
 import type { ClaimType } from "../shared/types";
-
-/** A claim record as stored (DB row or in-memory for tests). */
-export interface Claim {
-  id: string;
-  partyId: string;
-  characterId: number;
-  userId: string;
-  claimType: ClaimType;
-  rank: number | null;
-  createdAt: Date;
-}
 
 /**
  * The resolved state of a single character slot within a party.
@@ -28,18 +20,23 @@ export type CharacterSlotState =
 export interface CharacterSlot {
   characterId: number;
   state: CharacterSlotState;
-  /** user who holds the "claimed" (only when state === "claimed") */
   claimedBy: string | null;
-  /** users who hold a "conditional" */
   conditionalBy: string[];
-  /** users who expressed a "preference", ordered by rank */
   preferences: { userId: string; rank: number }[];
 }
 
 // ─── Queries ───────────────────────────────────────────────
 
-/** Derive the slot state for every character (1-12) given a list of claims. */
-export function resolveSlots(claims: Claim[]): CharacterSlot[] {
+/** Load all claims for a party and resolve every character slot (1-12). */
+export async function resolveSlots(
+  db: DrizzleD1Database,
+  partyId: string,
+): Promise<CharacterSlot[]> {
+  const claims = await db
+    .select()
+    .from(characterClaims)
+    .where(eq(characterClaims.partyId, partyId));
+
   const slots: CharacterSlot[] = [];
   for (let id = 1; id <= 12; id++) {
     const forChar = claims.filter((c) => c.characterId === id);
@@ -85,29 +82,51 @@ export type ClaimError =
   | "invalid_character";
 
 /**
- * Validate whether a new claim can be placed.
+ * Validate whether a new claim can be placed, reading current state from D1.
  * Returns null if valid, or an error string if not.
  */
-export function validateClaim(
+export async function validateClaim(
+  db: DrizzleD1Database,
+  partyId: string,
   newClaim: { userId: string; characterId: number; claimType: ClaimType },
-  existingClaims: Claim[],
-  partyMembers: string[],
-  partyStatus: "open" | "locked",
-): ClaimError | null {
-  if (partyStatus === "locked") return "party_locked";
-  if (!partyMembers.includes(newClaim.userId)) return "not_a_member";
+): Promise<ClaimError | null> {
   if (newClaim.characterId < 1 || newClaim.characterId > 12)
     return "invalid_character";
+
+  // Check party status
+  const party = await db
+    .select({ status: parties.status })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+  if (party?.status === "locked") return "party_locked";
+
+  // Check membership
+  const membership = await db
+    .select()
+    .from(partyMembers)
+    .where(
+      and(
+        eq(partyMembers.partyId, partyId),
+        eq(partyMembers.userId, newClaim.userId),
+      ),
+    )
+    .get();
+  if (!membership) return "not_a_member";
+
+  // Load existing claims for this party
+  const existingClaims = await db
+    .select()
+    .from(characterClaims)
+    .where(eq(characterClaims.partyId, partyId));
 
   const forChar = existingClaims.filter(
     (c) => c.characterId === newClaim.characterId,
   );
 
   if (newClaim.claimType === "claimed") {
-    // Rule: one "claimed" per character per party
     if (forChar.some((c) => c.claimType === "claimed"))
       return "character_already_claimed";
-    // Rule: a user can claim at most 1 character per party as "claimed"
     if (
       existingClaims.some(
         (c) => c.userId === newClaim.userId && c.claimType === "claimed",
@@ -117,10 +136,8 @@ export function validateClaim(
   }
 
   if (newClaim.claimType === "conditional") {
-    // Rule: one "conditional" per character per party
     if (forChar.some((c) => c.claimType === "conditional"))
       return "character_already_has_conditional";
-    // Prevent same user from double-conditional on same character
     if (
       forChar.some(
         (c) =>
@@ -130,35 +147,60 @@ export function validateClaim(
       return "user_already_conditional_this_character";
   }
 
-  // "preference" — no uniqueness constraints (anyone can want anyone)
   return null;
 }
 
+// ─── Mutations ─────────────────────────────────────────────
+
 /**
- * When a "claimed" displaces an existing "conditional" on the same character,
- * return the claim IDs that should be removed.
+ * Place a claim after validation. Displaces conditionals when a full claim
+ * is placed. Returns the new claim ID.
  */
-export function findDisplacedClaims(
-  characterId: number,
-  claimType: ClaimType,
-  existingClaims: Claim[],
-): string[] {
-  if (claimType !== "claimed") return [];
-  return existingClaims
-    .filter(
-      (c) => c.characterId === characterId && c.claimType === "conditional",
-    )
-    .map((c) => c.id);
+export async function placeClaim(
+  db: DrizzleD1Database,
+  partyId: string,
+  claim: { id: string; userId: string; characterId: number; claimType: ClaimType; rank: number | null },
+): Promise<string> {
+  // If full-claiming, displace any conditional on this character
+  if (claim.claimType === "claimed") {
+    await db
+      .delete(characterClaims)
+      .where(
+        and(
+          eq(characterClaims.partyId, partyId),
+          eq(characterClaims.characterId, claim.characterId),
+          eq(characterClaims.claimType, "conditional"),
+        ),
+      );
+  }
+
+  await db.insert(characterClaims).values({
+    id: claim.id,
+    partyId,
+    characterId: claim.characterId,
+    userId: claim.userId,
+    claimType: claim.claimType,
+    rank: claim.rank,
+    createdAt: new Date(),
+  });
+
+  return claim.id;
 }
 
-// ─── Auto-promote ──────────────────────────────────────────
-
 /**
- * Auto-promote: for each character that has exactly one conditional and no
+ * Auto-promote: for each character with exactly one conditional and no
  * "claimed", promote that conditional to "claimed".
- * Returns the claim IDs to promote.
+ * Returns the count of promoted claims.
  */
-export function findAutoPromotable(claims: Claim[]): string[] {
+export async function autoPromote(
+  db: DrizzleD1Database,
+  partyId: string,
+): Promise<number> {
+  const claims = await db
+    .select()
+    .from(characterClaims)
+    .where(eq(characterClaims.partyId, partyId));
+
   const toPromote: string[] = [];
   for (let charId = 1; charId <= 12; charId++) {
     const forChar = claims.filter((c) => c.characterId === charId);
@@ -168,5 +210,13 @@ export function findAutoPromotable(claims: Claim[]): string[] {
       toPromote.push(conditionals[0].id);
     }
   }
-  return toPromote;
+
+  for (const claimId of toPromote) {
+    await db
+      .update(characterClaims)
+      .set({ claimType: "claimed" })
+      .where(eq(characterClaims.id, claimId));
+  }
+
+  return toPromote.length;
 }

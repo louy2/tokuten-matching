@@ -1,48 +1,69 @@
-import { describe, it, expect } from "vitest";
-import { validateJoin, otherParties } from "../parties";
+import { describe, it, expect, beforeEach } from "vitest";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import { joinParty, otherParties } from "../parties";
+import { setupDb, insertUser, insertParty, insertMember } from "./helpers";
 
 // ─── Phase 2: JOIN ─────────────────────────────────────────
 // "Join 1+ parties (show prefs)"
 
 describe("JOIN — join a party", () => {
-  it("allows joining an open party", () => {
-    const err = validateJoin("open", ["user-a", "user-b"], "user-c");
+  let db: DrizzleD1Database;
+
+  beforeEach(async () => {
+    db = await setupDb();
+    await insertUser(db, "leader");
+    await insertUser(db, "alice");
+    await insertUser(db, "bob");
+    await insertParty(db, { id: "p1", leaderId: "leader", status: "open" });
+    await insertParty(db, { id: "p-locked", leaderId: "leader", status: "locked" });
+    await insertMember(db, "p1", "alice");
+  });
+
+  it("allows joining an open party", async () => {
+    const err = await joinParty(db, "p1", "bob");
     expect(err).toBeNull();
   });
 
-  it("rejects joining a locked party", () => {
-    const err = validateJoin("locked", ["user-a"], "user-c");
+  it("rejects joining a locked party", async () => {
+    const err = await joinParty(db, "p-locked", "bob");
     expect(err).toBe("party_locked");
   });
 
-  it("rejects joining a party you are already in", () => {
-    const err = validateJoin("open", ["user-a", "user-b"], "user-a");
+  it("rejects joining a party you are already in", async () => {
+    const err = await joinParty(db, "p1", "alice");
     expect(err).toBe("already_a_member");
   });
 });
 
 describe("JOIN — multi-party membership", () => {
-  const allMemberships = [
-    { partyId: "p1", userId: "alice" },
-    { partyId: "p2", userId: "alice" },
-    { partyId: "p3", userId: "alice" },
-    { partyId: "p1", userId: "bob" },
-  ];
+  let db: DrizzleD1Database;
 
-  it("a user can be in multiple parties", () => {
-    const others = otherParties("alice", "p1", allMemberships);
-    expect(others).toEqual(["p2", "p3"]);
+  beforeEach(async () => {
+    db = await setupDb();
+    await insertUser(db, "leader");
+    await insertUser(db, "alice");
+    await insertUser(db, "bob");
+    await insertParty(db, { id: "p1", leaderId: "leader" });
+    await insertParty(db, { id: "p2", leaderId: "leader" });
+    await insertParty(db, { id: "p3", leaderId: "leader" });
+    await insertMember(db, "p1", "alice");
+    await insertMember(db, "p2", "alice");
+    await insertMember(db, "p3", "alice");
+    await insertMember(db, "p1", "bob");
   });
 
-  it("returns empty when user has no other parties", () => {
-    const others = otherParties("bob", "p1", allMemberships);
+  it("a user can be in multiple parties", async () => {
+    const others = await otherParties(db, "alice", "p1");
+    expect(others.sort()).toEqual(["p2", "p3"]);
+  });
+
+  it("returns empty when user has no other parties", async () => {
+    const others = await otherParties(db, "bob", "p1");
     expect(others).toEqual([]);
   });
 
-  it("shows multi-party transparency for leader view", () => {
-    // Alice is in p1 and the leader is viewing p1 — they should see
-    // that Alice is also in p2 and p3
-    const others = otherParties("alice", "p1", allMemberships);
+  it("shows multi-party transparency for leader view", async () => {
+    const others = await otherParties(db, "alice", "p1");
     expect(others).toHaveLength(2);
     expect(others).toContain("p2");
     expect(others).toContain("p3");

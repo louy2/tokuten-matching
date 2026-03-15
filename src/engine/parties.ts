@@ -1,70 +1,125 @@
+import { eq, and, ne } from "drizzle-orm";
+import type { DrizzleD1Database } from "drizzle-orm/d1";
+import { parties, partyMembers } from "../db/schema";
 import { SET_PRICE_YEN } from "../shared/characters";
-import type { PartyStatus } from "../shared/types";
-
-export interface Party {
-  id: string;
-  name: string;
-  description: string | null;
-  leaderId: string;
-  status: PartyStatus;
-  groupChatLink: string | null;
-  language: string;
-  autoPromoteDate: string | null;
-  createdAt: Date;
-}
-
-export interface Member {
-  partyId: string;
-  userId: string;
-  joinedAt: Date;
-}
 
 // ─── Browse / Filter ───────────────────────────────────────
 
-export interface PartyFilter {
-  language?: string;
-  /** Only parties that have this character slot open */
-  needsCharacter?: number;
-}
-
-export interface BrowsePartyInfo {
-  party: Party;
+export interface BrowsePartyRow {
+  id: string;
+  name: string;
+  language: string;
+  status: string;
+  groupChatLink: string | null;
+  createdAt: Date;
   memberCount: number;
-  openSlots: number;
-  claimedSlots: number;
+  claimedCount: number;
 }
 
-export function filterParties(
-  infos: BrowsePartyInfo[],
-  filter: PartyFilter,
-): BrowsePartyInfo[] {
-  let result = infos.filter((p) => p.party.status === "open");
-  if (filter.language) {
-    result = result.filter((p) => p.party.language === filter.language);
+interface RawBrowseRow {
+  id: string;
+  name: string;
+  language: string;
+  status: string;
+  group_chat_link: string | null;
+  created_at: number;
+  member_count: number;
+  claimed_count: number;
+}
+
+/** Uses raw D1 for the aggregation subqueries. */
+export async function listOpenParties(
+  d1: D1Database,
+  filter?: { language?: string },
+): Promise<BrowsePartyRow[]> {
+  let query = `
+    SELECT
+      p.id, p.name, p.language, p.status, p.group_chat_link, p.created_at,
+      (SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = p.id) AS member_count,
+      (SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = p.id AND cc.claim_type = 'claimed') AS claimed_count
+    FROM parties p
+    WHERE p.status = 'open'
+  `;
+  const params: string[] = [];
+
+  if (filter?.language) {
+    query += " AND p.language = ?";
+    params.push(filter.language);
   }
-  if (filter.needsCharacter) {
-    result = result.filter((p) => p.openSlots > 0);
-  }
-  return result;
+
+  query += " ORDER BY p.created_at";
+
+  const raw = await d1.prepare(query).bind(...params).all<RawBrowseRow>();
+
+  return raw.results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    language: r.language,
+    status: r.status,
+    groupChatLink: r.group_chat_link,
+    createdAt: new Date(r.created_at * 1000),
+    memberCount: r.member_count,
+    claimedCount: r.claimed_count,
+  }));
 }
 
 // ─── Join ──────────────────────────────────────────────────
 
-export type JoinError = "party_locked" | "already_a_member";
+export type JoinError = "party_locked" | "already_a_member" | "party_not_found";
 
-export function validateJoin(
-  partyStatus: PartyStatus,
-  existingMembers: string[],
+export async function joinParty(
+  db: DrizzleD1Database,
+  partyId: string,
   userId: string,
-): JoinError | null {
-  if (partyStatus === "locked") return "party_locked";
-  if (existingMembers.includes(userId)) return "already_a_member";
+): Promise<JoinError | null> {
+  const party = await db
+    .select({ status: parties.status })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+
+  if (!party) return "party_not_found";
+  if (party.status === "locked") return "party_locked";
+
+  const existing = await db
+    .select()
+    .from(partyMembers)
+    .where(
+      and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, userId)),
+    )
+    .get();
+  if (existing) return "already_a_member";
+
+  await db.insert(partyMembers).values({
+    partyId,
+    userId,
+    joinedAt: new Date(),
+  });
+
   return null;
+}
+
+// ─── Multi-party transparency ──────────────────────────────
+
+export async function otherParties(
+  db: DrizzleD1Database,
+  userId: string,
+  currentPartyId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ partyId: partyMembers.partyId })
+    .from(partyMembers)
+    .where(
+      and(
+        eq(partyMembers.userId, userId),
+        ne(partyMembers.partyId, currentPartyId),
+      ),
+    );
+  return rows.map((r) => r.partyId);
 }
 
 // ─── Cost split ────────────────────────────────────────────
 
-/** Cost per person = ¥21,600 / members with claims. Returns 0 if nobody has claims. */
 export function costPerPerson(membersWithClaims: number): number {
   if (membersWithClaims <= 0) return 0;
   return Math.ceil(SET_PRICE_YEN / membersWithClaims);
@@ -84,23 +139,20 @@ export function isAutoPromoteDue(
   now: Date = new Date(),
 ): boolean {
   if (!autoPromoteDate) return false;
-  // autoPromoteDate is YYYY-MM-DD, interpret as JST midnight
   const target = new Date(autoPromoteDate + "T00:00:00+09:00");
   return now >= target;
 }
 
-// ─── Multi-party transparency ──────────────────────────────
+// ─── Party detail helpers ──────────────────────────────────
 
-/**
- * Given a user's memberships across all parties, return the party IDs
- * where they are also a member (excluding the current party).
- */
-export function otherParties(
-  userId: string,
-  currentPartyId: string,
-  allMemberships: { partyId: string; userId: string }[],
-): string[] {
-  return allMemberships
-    .filter((m) => m.userId === userId && m.partyId !== currentPartyId)
-    .map((m) => m.partyId);
+export async function getPartyWithGroupChatLink(
+  db: DrizzleD1Database,
+  partyId: string,
+): Promise<{ groupChatLink: string | null } | null> {
+  const row = await db
+    .select({ groupChatLink: parties.groupChatLink })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+  return row ?? null;
 }
