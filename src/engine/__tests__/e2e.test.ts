@@ -180,13 +180,22 @@ describe("E2E: 3-person party with contested characters resolved through discuss
     expect(slots[0].state).toBe("conditional");
     expect(slots[0].conditionalBy).toEqual(["ayumu"]);
 
-    // Setsuna can't place a second conditional — validation blocks it
+    // Setsuna also places a conditional — now it's contested
     const condErr = await validateClaim(db, PARTY, {
       userId: "setsuna", characterId: 1, claimType: "conditional",
     });
-    expect(condErr).toBe("character_already_has_conditional");
+    expect(condErr).toBeNull();
+    await placeClaim(db, PARTY, { id: nextId(), userId: "setsuna", characterId: 1, claimType: "conditional", rank: null });
+
+    slots = await resolveSlots(db, PARTY);
+    expect(slots[0].state).toBe("contested");
+    expect(slots[0].conditionalBy.sort()).toEqual(["ayumu", "setsuna"]);
 
     // After discussion in LINE, they agree: Setsuna takes Setsuna Yuki (char 10) instead
+    // Setsuna cancels her conditional on character 1
+    const { cancelClaim } = await import("../claims");
+    await cancelClaim(db, PARTY, "setsuna", 1, "conditional");
+
     // Setsuna full-claims character 10 directly
     await placeClaim(db, PARTY, { id: nextId(), userId: "setsuna", characterId: 10, claimType: "claimed", rank: null });
 
@@ -205,7 +214,9 @@ describe("E2E: 3-person party with contested characters resolved through discuss
     expect(slots[9].claimedBy).toBe("setsuna");
     expect(slots[11].claimedBy).toBe("yuu");
 
-    // 9 characters still open — this is fine, party has 3 people
+    // 9 characters open + 2 wanted (the preferences on char 1 from both)
+    // Actually char 1 is claimed, so its preferences don't matter.
+    // Characters 2-9 and 11 have no claims = 9 open
     const openSlots = slots.filter((s) => s.state === "open");
     expect(openSlots).toHaveLength(9);
 
@@ -262,7 +273,7 @@ describe("E2E: User joins, claims, then quickly undoes everything", () => {
     expect(undoCond).toBe("ok");
 
     slots = await resolveSlots(db, PARTY);
-    expect(slots[4].state).toBe("open"); // back to open
+    expect(slots[4].state).toBe("wanted"); // back to wanted (preference exists)
     expect(slots[4].preferences).toHaveLength(1); // preference still there
 
     // Undo the preference
@@ -548,9 +559,9 @@ describe("E2E: Duplicate and invalid operations are rejected", () => {
       id: nextId(), userId: "alice", characterId: 1, claimType: "claimed", rank: null,
     });
 
-    // Alice can claim a second character (multi-character claiming allowed)
+    // Alice cannot claim a second character (max 1 full claim per user per party)
     expect(await validateClaim(db, PARTY, { userId: "alice", characterId: 2, claimType: "claimed" }))
-      .toBeNull();
+      .toBe("user_already_has_full_claim");
 
     // Bob can't claim the same character Alice claimed
     expect(await validateClaim(db, PARTY, { userId: "bob", characterId: 1, claimType: "claimed" }))

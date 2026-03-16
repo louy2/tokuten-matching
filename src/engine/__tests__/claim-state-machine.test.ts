@@ -41,11 +41,11 @@ describe("Claim State Machine", () => {
       expect(slots[0].conditionalBy).toEqual([]);
     });
 
-    it("character with only preferences is still OPEN", async () => {
+    it("character with only preferences is WANTED", async () => {
       await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "preference", rank: 1 });
       await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "bob", claimType: "preference", rank: 2 });
       const slots = await resolveSlots(db, PARTY);
-      expect(slots[0].state).toBe("open");
+      expect(slots[0].state).toBe("wanted");
       expect(slots[0].preferences).toHaveLength(2);
     });
 
@@ -170,7 +170,7 @@ describe("Claim State Machine", () => {
       expect(slots[1].state).toBe("conditional");
       expect(slots[1].conditionalBy).toEqual(["bob"]);
 
-      expect(slots[2].state).toBe("open");
+      expect(slots[2].state).toBe("wanted");
       expect(slots[2].preferences).toHaveLength(2);
 
       expect(slots[3].state).toBe("contested");
@@ -185,12 +185,12 @@ describe("Claim State Machine", () => {
   // ── Per-user claim limits ──
 
   describe("per-user claim limits", () => {
-    it("user can claim multiple characters in a party", async () => {
+    it("user cannot claim multiple characters in a party (max 1 full claim)", async () => {
       await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
       const err = await validateClaim(db, PARTY, {
         userId: "alice", characterId: 2, claimType: "claimed",
       });
-      expect(err).toBeNull();
+      expect(err).toBe("user_already_has_full_claim");
     });
 
     it("user can have multiple conditionals across different characters", async () => {

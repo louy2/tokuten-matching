@@ -60,6 +60,32 @@ export const characterClaims = sqliteTable(
   // because they differ by claim_type (see PLAN.md Key Rules)
 );
 
+export const readinessChecks = sqliteTable("readiness_checks", {
+  id: text("id").primaryKey(),
+  partyId: text("party_id")
+    .notNull()
+    .references(() => parties.id),
+  initiatedBy: text("initiated_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const readinessResponses = sqliteTable(
+  "readiness_responses",
+  {
+    checkId: text("check_id")
+      .notNull()
+      .references(() => readinessChecks.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    stillIn: integer("still_in", { mode: "boolean" }).notNull(),
+    respondedAt: integer("responded_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.checkId, table.userId] })],
+);
+
 export const events = sqliteTable(
   "events",
   {

@@ -14,6 +14,7 @@ import { buildEventInsert } from "./events";
  */
 export type CharacterSlotState =
   | "open"
+  | "wanted"
   | "conditional"
   | "contested"
   | "claimed";
@@ -56,6 +57,8 @@ export async function resolveSlots(
       state = "contested";
     } else if (conditionals.length === 1) {
       state = "conditional";
+    } else if (preferences.length > 0) {
+      state = "wanted";
     } else {
       state = "open";
     }
@@ -75,9 +78,9 @@ export async function resolveSlots(
 
 export type ClaimError =
   | "character_already_claimed"
-  | "character_already_has_conditional"
   | "user_already_conditional_this_character"
   | "user_already_prefers_this_character"
+  | "user_already_has_full_claim"
   | "party_locked"
   | "not_a_member"
   | "invalid_character"
@@ -131,6 +134,11 @@ export async function validateClaim(
   if (newClaim.claimType === "claimed") {
     if (forChar.some((c) => c.claimType === "claimed"))
       return "character_already_claimed";
+    // Per-user limit: max 1 full claim per user per party
+    if (existingClaims.some(
+      (c) => c.userId === newClaim.userId && c.claimType === "claimed",
+    ))
+      return "user_already_has_full_claim";
   }
 
   if (newClaim.claimType === "preference") {
@@ -148,8 +156,8 @@ export async function validateClaim(
   if (newClaim.claimType === "conditional") {
     if (forChar.some((c) => c.claimType === "claimed"))
       return "character_already_claimed";
-    if (forChar.some((c) => c.claimType === "conditional"))
-      return "character_already_has_conditional";
+    // Same user can't place two conditionals on same character,
+    // but different users CAN → produces "contested" state
     if (
       forChar.some(
         (c) =>

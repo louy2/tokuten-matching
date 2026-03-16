@@ -1,6 +1,6 @@
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import { env } from "cloudflare:test";
-import { users, parties, partyMembers, characterClaims, events } from "../../db/schema";
+import { users, parties, partyMembers, characterClaims, events, readinessChecks, readinessResponses } from "../../db/schema";
 
 let _id = 0;
 export function nextId(prefix = "id") {
@@ -21,6 +21,8 @@ export async function setupDb(): Promise<DrizzleD1Database> {
   const db = getDb();
 
   // Clear tables in correct order (foreign keys)
+  await db.delete(readinessResponses);
+  await db.delete(readinessChecks);
   await db.delete(events);
   await db.delete(characterClaims);
   await db.delete(partyMembers);
