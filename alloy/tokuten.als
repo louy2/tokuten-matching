@@ -77,12 +77,6 @@ fact AtMostOneConditionalPerCharacterPerParty {
       c.party = p and c.character = ch and c.claimType = Conditional
 }
 
-fact AtMostOneClaimedPerUserPerParty {
-  all p : Party, u : User |
-    lone c : CharacterClaim |
-      c.party = p and c.owner = u and c.claimType = Claimed
-}
-
 fact DisplacementRule {
   -- If a character is claimed in a party, no conditional for it exists
   all p : Party, ch : Character |
@@ -116,14 +110,7 @@ assert ClaimedExclusivity {
       c.party = p and c.character = ch and c.claimType = Claimed} <= 1
 }
 
--- 3. User claim limit: a user holds at most one claimed character per party
-assert UserClaimLimit {
-  all p : Party, u : User |
-    #{c : CharacterClaim |
-      c.party = p and c.owner = u and c.claimType = Claimed} <= 1
-}
-
--- 4. Conditional exclusivity: at most one conditional per character per party
+-- 3. Conditional exclusivity: at most one conditional per character per party
 assert ConditionalExclusivity {
   all p : Party, ch : Character |
     #{c : CharacterClaim |
@@ -178,7 +165,6 @@ run ShowExample {
 -- Check all assertions (5 Int = bitwidth 5, range -16..15, enough for <= 12)
 check NoOrphanClaims          for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check ClaimedExclusivity      for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check UserClaimLimit          for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check ConditionalExclusivity  for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check DisplacementInvariant   for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check LeaderMembership        for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
