@@ -16,13 +16,21 @@ app.get("/api/auth/me", async (c) => {
   const userId = await c.env.SESSIONS.get(`session:${sessionId}`);
   if (!userId) return c.json({ user: null });
 
-  const user = await c.env.DB.prepare(
+  const row = await c.env.DB.prepare(
     "SELECT id, display_name, avatar_url FROM users WHERE id = ?",
   )
     .bind(userId)
-    .first();
+    .first<{ id: string; display_name: string; avatar_url: string | null }>();
 
-  return c.json({ user: user ?? null });
+  if (!row) return c.json({ user: null });
+
+  return c.json({
+    user: {
+      id: row.id,
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url,
+    },
+  });
 });
 
 app.get("/api/auth/login", async (c) => {
