@@ -81,6 +81,10 @@
     "loginRequired": "登录以查看个人资料。",
     "userId": "用户ID",
     "avatar": "头像",
+    "characterPreferences": "角色偏好设置",
+    "characterPreferencesHint": "按喜好顺序选择角色。加入队伍后会自动显示你的偏好。",
+    "addCharacter": "添加角色",
+    "noPreferencesYet": "还没有设置偏好。点击上方角色添加。",
     "logout": "退出登录"
   },
   "slotState": {

@@ -81,6 +81,10 @@
     "loginRequired": "Log in to view your profile.",
     "userId": "User ID",
     "avatar": "Avatar",
+    "characterPreferences": "Character Preferences",
+    "characterPreferencesHint": "Rank the characters you want. Your preferences are shown automatically when you join a party.",
+    "addCharacter": "Add a character",
+    "noPreferencesYet": "No preferences set yet. Tap a character above to add.",
     "logout": "Log Out"
   },
   "slotState": {

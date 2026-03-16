@@ -49,6 +49,19 @@ export async function postApi<T>(url: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function putApi<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` })) as { error: string };
+    throw new Error(err.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export async function deleteApi<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "DELETE",

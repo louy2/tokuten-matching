@@ -11,6 +11,7 @@ export interface UserProfile {
   avatarUrl: string | null;
   languages: Language[];
   paymentMethods: string[];
+  characterPreferences: number[]; // character IDs in preference order
 }
 
 export interface PartyListItem {
@@ -41,6 +42,7 @@ export interface PartyMember {
   displayName: string;
   avatarUrl: string | null;
   joinedAt: string;
+  characterPreferences: number[];
 }
 
 export interface CharacterClaimView {
@@ -55,4 +57,5 @@ export interface AuthUser {
   id: string;
   displayName: string;
   avatarUrl: string | null;
+  characterPreferences: number[];
 }
