@@ -1,14 +1,6 @@
-/** Shared auth helper for API routes */
-export interface Env {
-  DB: D1Database;
-  SESSIONS: KVNamespace;
-  DISCORD_CLIENT_ID: string;
-  DISCORD_CLIENT_SECRET: string;
-  DISCORD_REDIRECT_URI: string;
-  DISCORD_BOT_TOKEN: string;
-  CRON_SECRET: string;
-}
+import type { Env } from "./env";
 
+/** Extract the authenticated user from the session cookie, or return null. */
 export async function getSessionUser(
   request: Request,
   env: Env,
