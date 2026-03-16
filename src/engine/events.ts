@@ -12,7 +12,9 @@ export type EventType =
   | "claim_promoted"
   | "claim_cancelled"
   | "party_created"
-  | "party_locked";
+  | "party_locked"
+  | "user_created"
+  | "user_profile_updated";
 
 export interface EventRow {
   id: string;

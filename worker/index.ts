@@ -12,6 +12,7 @@ import {
 } from "../src/db/schema";
 import { validateClaim, placeClaim, cancelClaim } from "../src/engine/claims";
 import { createParty, joinParty } from "../src/engine/parties";
+import { upsertUser } from "../src/engine/users";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -106,36 +107,17 @@ app.get("/api/auth/callback", async (c) => {
 
   const db = getDb(c.env.DB);
 
-  // Find or create user
-  const existing = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.oauthProvider, "discord"), eq(users.oauthId, discord.id)))
-    .get();
-
   const displayName = discord.global_name ?? discord.username;
   const avatarUrl = discord.avatar
     ? `https://cdn.discordapp.com/avatars/${discord.id}/${discord.avatar}.png`
     : null;
 
-  let userId: string;
-  if (existing) {
-    userId = existing.id;
-    await db
-      .update(users)
-      .set({ displayName, avatarUrl })
-      .where(eq(users.id, userId));
-  } else {
-    userId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: userId,
-      displayName,
-      avatarUrl,
-      oauthProvider: "discord",
-      oauthId: discord.id,
-      createdAt: new Date(),
-    });
-  }
+  const { userId } = await upsertUser(db, {
+    displayName,
+    avatarUrl,
+    oauthProvider: "discord",
+    oauthId: discord.id,
+  });
 
   // Create session
   const sessionId = crypto.randomUUID();

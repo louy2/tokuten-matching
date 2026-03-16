@@ -35,7 +35,15 @@ export async function createParty(
     partyId,
     userId: input.leaderId,
     type: "party_created",
-    payload: { partyId, leaderId: input.leaderId },
+    payload: {
+      partyId,
+      name: input.name,
+      description: input.description ?? null,
+      leaderId: input.leaderId,
+      languages: input.languages,
+      groupChatLink: input.groupChatLink ?? null,
+      autoPromoteDate: input.autoPromoteDate ?? "2026-05-08",
+    },
   });
 
   const ev2 = buildEventInsert(db, {
@@ -67,6 +75,44 @@ export async function createParty(
   ]);
 
   return { partyId, eventIds: [ev1.id, ev2.id] };
+}
+
+// ─── Lock ─────────────────────────────────────────────────
+
+export type LockError = "party_not_found" | "already_locked" | "not_leader";
+
+/**
+ * Lock a party (prevent new joins and claims).
+ * Status update + event are batched atomically.
+ */
+export async function lockParty(
+  db: DrizzleD1Database,
+  partyId: string,
+  userId: string,
+): Promise<{ eventId: string } | { error: LockError }> {
+  const party = await db
+    .select({ status: parties.status, leaderId: parties.leaderId })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+
+  if (!party) return { error: "party_not_found" };
+  if (party.status === "locked") return { error: "already_locked" };
+  if (party.leaderId !== userId) return { error: "not_leader" };
+
+  const ev = buildEventInsert(db, {
+    partyId,
+    userId,
+    type: "party_locked",
+    payload: { partyId },
+  });
+
+  await db.batch([
+    db.update(parties).set({ status: "locked" }).where(eq(parties.id, partyId)),
+    ev.query,
+  ]);
+
+  return { eventId: ev.id };
 }
 
 // ─── Browse / Filter ───────────────────────────────────────
