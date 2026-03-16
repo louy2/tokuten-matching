@@ -1,4 +1,4 @@
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { parties, partyMembers } from "../db/schema";
 import { SET_PRICE_YEN } from "../shared/characters";
@@ -17,51 +17,47 @@ export interface BrowsePartyRow {
   claimedCount: number;
 }
 
-interface RawBrowseRow {
-  id: string;
-  name: string;
-  languages: string;
-  status: string;
-  group_chat_link: string | null;
-  created_at: number;
-  member_count: number;
-  claimed_count: number;
-}
-
-/** Uses raw D1 for the aggregation subqueries. */
 export async function listOpenParties(
-  d1: D1Database,
+  db: DrizzleD1Database,
   filter?: { language?: string },
 ): Promise<BrowsePartyRow[]> {
-  let query = `
-    SELECT
-      p.id, p.name, p.languages, p.status, p.group_chat_link, p.created_at,
-      (SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = p.id) AS member_count,
-      (SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = p.id AND cc.claim_type = 'claimed') AS claimed_count
-    FROM parties p
-    WHERE p.status = 'open'
-  `;
-  const params: string[] = [];
+  // Use raw table-qualified reference to avoid ambiguity in correlated subqueries
+  // (character_claims has its own "id" column, so unqualified "id" would be ambiguous)
+  const partyIdRef = sql.raw('"parties"."id"');
+  const memberCountSq = sql<number>`(SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = ${partyIdRef})`.as("memberCount");
+  const claimedCountSq = sql<number>`(SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = ${partyIdRef} AND cc.claim_type = 'claimed')`.as("claimedCount");
 
-  if (filter?.language) {
-    // Match if the filter language appears anywhere in the JSON array
-    query += " AND EXISTS (SELECT 1 FROM json_each(p.languages) WHERE json_each.value = ?)";
-    params.push(filter.language);
-  }
+  const rows = await db
+    .select({
+      id: parties.id,
+      name: parties.name,
+      languages: parties.languages,
+      status: parties.status,
+      groupChatLink: parties.groupChatLink,
+      createdAt: parties.createdAt,
+      memberCount: memberCountSq,
+      claimedCount: claimedCountSq,
+    })
+    .from(parties)
+    .where(
+      filter?.language
+        ? and(
+            eq(parties.status, "open"),
+            sql`EXISTS (SELECT 1 FROM json_each(${parties.languages}) WHERE json_each.value = ${filter.language})`,
+          )
+        : eq(parties.status, "open"),
+    )
+    .orderBy(parties.createdAt);
 
-  query += " ORDER BY p.created_at";
-
-  const raw = await d1.prepare(query).bind(...params).all<RawBrowseRow>();
-
-  return raw.results.map((r) => ({
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     languages: JSON.parse(r.languages) as string[],
     status: r.status,
-    groupChatLink: r.group_chat_link,
-    createdAt: new Date(r.created_at * 1000),
-    memberCount: r.member_count,
-    claimedCount: r.claimed_count,
+    groupChatLink: r.groupChatLink,
+    createdAt: r.createdAt,
+    memberCount: r.memberCount,
+    claimedCount: r.claimedCount,
   }));
 }
 

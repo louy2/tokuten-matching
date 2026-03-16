@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { env } from "cloudflare:test";
 import { listOpenParties } from "../parties";
 import { setupDb, insertUser, insertParty, insertMember, insertClaim } from "./helpers";
 
@@ -52,7 +51,7 @@ describe("BROWSE — find parties with open characters", () => {
   });
 
   it("returns only open parties by default", async () => {
-    const result = await listOpenParties(env.DB);
+    const result = await listOpenParties(db);
     const ids = result.map((p) => p.id);
     expect(ids).toContain("p1");
     expect(ids).toContain("p2");
@@ -62,13 +61,13 @@ describe("BROWSE — find parties with open characters", () => {
   });
 
   it("filters by language — matches single-language parties", async () => {
-    const result = await listOpenParties(env.DB, { language: "zh" });
+    const result = await listOpenParties(db, { language: "zh" });
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe("p4");
   });
 
   it("filters by language — matches multilingual parties", async () => {
-    const result = await listOpenParties(env.DB, { language: "ja" });
+    const result = await listOpenParties(db, { language: "ja" });
     const ids = result.map((p) => p.id);
     // p1 (ja) and p5 (ja+en) should both match
     expect(ids).toContain("p1");
@@ -77,37 +76,37 @@ describe("BROWSE — find parties with open characters", () => {
   });
 
   it("multilingual party appears in results for each of its languages", async () => {
-    const jaResults = await listOpenParties(env.DB, { language: "ja" });
-    const enResults = await listOpenParties(env.DB, { language: "en" });
+    const jaResults = await listOpenParties(db, { language: "ja" });
+    const enResults = await listOpenParties(db, { language: "en" });
     expect(jaResults.map((p) => p.id)).toContain("p5");
     expect(enResults.map((p) => p.id)).toContain("p5");
   });
 
   it("excludes locked parties even if they match language", async () => {
-    const result = await listOpenParties(env.DB, { language: "ja" });
+    const result = await listOpenParties(db, { language: "ja" });
     expect(result.every((p) => p.status === "open")).toBe(true);
   });
 
   it("returns empty for a language with no open parties", async () => {
-    const result = await listOpenParties(env.DB, { language: "ko" });
+    const result = await listOpenParties(db, { language: "ko" });
     expect(result).toHaveLength(0);
   });
 
   it("shows member count and claimed count for each party", async () => {
-    const result = await listOpenParties(env.DB, { language: "en" });
+    const result = await listOpenParties(db, { language: "en" });
     const p2 = result.find((p) => p.id === "p2")!;
     expect(p2.memberCount).toBe(11);
     expect(p2.claimedCount).toBe(11);
   });
 
   it("shows 0 members/claims for an empty party", async () => {
-    const result = await listOpenParties(env.DB, { language: "zh" });
+    const result = await listOpenParties(db, { language: "zh" });
     expect(result[0].memberCount).toBe(0);
     expect(result[0].claimedCount).toBe(0);
   });
 
   it("returns languages as an array", async () => {
-    const result = await listOpenParties(env.DB);
+    const result = await listOpenParties(db);
     const p5 = result.find((p) => p.id === "p5")!;
     expect(p5.languages).toEqual(["ja", "en"]);
 

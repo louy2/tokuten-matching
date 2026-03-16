@@ -1,7 +1,15 @@
 import { Hono } from "hono";
+import { eq, and, sql } from "drizzle-orm";
 import type { Env } from "./env";
 import { getSessionUser } from "./auth";
+import { getDb } from "./db";
 import { sendReminders } from "./reminders";
+import {
+  users,
+  parties,
+  partyMembers,
+  characterClaims,
+} from "../src/db/schema";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -16,21 +24,20 @@ app.get("/api/auth/me", async (c) => {
   const userId = await c.env.SESSIONS.get(`session:${sessionId}`);
   if (!userId) return c.json({ user: null });
 
-  const row = await c.env.DB.prepare(
-    "SELECT id, display_name, avatar_url FROM users WHERE id = ?",
-  )
-    .bind(userId)
-    .first<{ id: string; display_name: string; avatar_url: string | null }>();
+  const db = getDb(c.env.DB);
+  const user = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
 
-  if (!row) return c.json({ user: null });
+  if (!user) return c.json({ user: null });
 
-  return c.json({
-    user: {
-      id: row.id,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-    },
-  });
+  return c.json({ user });
 });
 
 app.get("/api/auth/login", async (c) => {
@@ -95,12 +102,14 @@ app.get("/api/auth/callback", async (c) => {
     avatar: string | null;
   };
 
+  const db = getDb(c.env.DB);
+
   // Find or create user
-  const existing = await c.env.DB.prepare(
-    "SELECT id FROM users WHERE oauth_provider = 'discord' AND oauth_id = ?",
-  )
-    .bind(discord.id)
-    .first<{ id: string }>();
+  const existing = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.oauthProvider, "discord"), eq(users.oauthId, discord.id)))
+    .get();
 
   const displayName = discord.global_name ?? discord.username;
   const avatarUrl = discord.avatar
@@ -110,18 +119,20 @@ app.get("/api/auth/callback", async (c) => {
   let userId: string;
   if (existing) {
     userId = existing.id;
-    await c.env.DB.prepare(
-      "UPDATE users SET display_name = ?, avatar_url = ? WHERE id = ?",
-    )
-      .bind(displayName, avatarUrl, userId)
-      .run();
+    await db
+      .update(users)
+      .set({ displayName, avatarUrl })
+      .where(eq(users.id, userId));
   } else {
     userId = crypto.randomUUID();
-    await c.env.DB.prepare(
-      "INSERT INTO users (id, display_name, avatar_url, oauth_provider, oauth_id, created_at) VALUES (?, ?, ?, 'discord', ?, ?)",
-    )
-      .bind(userId, displayName, avatarUrl, discord.id, Math.floor(Date.now() / 1000))
-      .run();
+    await db.insert(users).values({
+      id: userId,
+      displayName,
+      avatarUrl,
+      oauthProvider: "discord",
+      oauthId: discord.id,
+      createdAt: new Date(),
+    });
   }
 
   // Create session
@@ -166,60 +177,71 @@ app.get("/api/auth/logout", async (c) => {
 
 app.get("/api/parties", async (c) => {
   const language = c.req.query("language");
+  const db = getDb(c.env.DB);
 
-  let query = `
-    SELECT
-      p.id, p.name, p.languages, p.created_at,
-      COUNT(DISTINCT pm.user_id) as member_count
-    FROM parties p
-    LEFT JOIN party_members pm ON pm.party_id = p.id
-    WHERE p.status = 'open'
-  `;
-  const params: string[] = [];
+  const partyIdRef = sql.raw('"parties"."id"');
+  const memberCountSq = sql<number>`(SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = ${partyIdRef})`.as("memberCount");
+  const claimedCountSq = sql<number>`(SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = ${partyIdRef} AND cc.claim_type = 'claimed')`.as("claimedCount");
 
-  if (language) {
-    query +=
-      " AND EXISTS (SELECT 1 FROM json_each(p.languages) WHERE json_each.value = ?)";
-    params.push(language);
-  }
+  let query = db
+    .select({
+      id: parties.id,
+      name: parties.name,
+      languages: parties.languages,
+      createdAt: parties.createdAt,
+      memberCount: memberCountSq,
+      claimedCount: claimedCountSq,
+    })
+    .from(parties)
+    .where(
+      language
+        ? and(
+            eq(parties.status, "open"),
+            sql`EXISTS (SELECT 1 FROM json_each(${parties.languages}) WHERE json_each.value = ${language})`,
+          )
+        : eq(parties.status, "open"),
+    )
+    .orderBy(sql`${parties.createdAt} DESC`);
 
-  query += " GROUP BY p.id ORDER BY p.created_at DESC";
-
-  const result = await c.env.DB.prepare(query).bind(...params).all();
-  return c.json({ parties: result.results });
+  const rows = await query;
+  return c.json({ parties: rows });
 });
 
 app.get("/api/parties/:partyId", async (c) => {
   const partyId = c.req.param("partyId");
+  const db = getDb(c.env.DB);
 
   const [party, members, claims] = await Promise.all([
-    c.env.DB.prepare("SELECT * FROM parties WHERE id = ?")
-      .bind(partyId)
-      .first(),
-    c.env.DB.prepare(
-      `SELECT pm.user_id, u.display_name, u.avatar_url, pm.joined_at
-       FROM party_members pm
-       JOIN users u ON u.id = pm.user_id
-       WHERE pm.party_id = ?`,
-    )
-      .bind(partyId)
-      .all(),
-    c.env.DB.prepare(
-      `SELECT cc.character_id, cc.user_id, u.display_name, cc.claim_type, cc.rank
-       FROM character_claims cc
-       JOIN users u ON u.id = cc.user_id
-       WHERE cc.party_id = ?`,
-    )
-      .bind(partyId)
-      .all(),
+    db.select().from(parties).where(eq(parties.id, partyId)).get(),
+    db
+      .select({
+        userId: partyMembers.userId,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        joinedAt: partyMembers.joinedAt,
+      })
+      .from(partyMembers)
+      .innerJoin(users, eq(users.id, partyMembers.userId))
+      .where(eq(partyMembers.partyId, partyId)),
+    db
+      .select({
+        characterId: characterClaims.characterId,
+        userId: characterClaims.userId,
+        displayName: users.displayName,
+        claimType: characterClaims.claimType,
+        rank: characterClaims.rank,
+      })
+      .from(characterClaims)
+      .innerJoin(users, eq(users.id, characterClaims.userId))
+      .where(eq(characterClaims.partyId, partyId)),
   ]);
 
   if (!party) return c.json({ error: "Party not found" }, 404);
 
   return c.json({
     ...party,
-    members: members.results,
-    claims: claims.results,
+    members,
+    claims,
   });
 });
 
@@ -241,29 +263,27 @@ app.post("/api/parties/create", async (c) => {
     return c.json({ error: "At least one language is required" }, 400);
   }
 
+  const db = getDb(c.env.DB);
   const partyId = crypto.randomUUID();
-  const now = Math.floor(Date.now() / 1000);
+  const now = new Date();
 
-  await c.env.DB.prepare(
-    `INSERT INTO parties (id, name, description, leader_id, status, group_chat_link, languages, auto_promote_date, created_at)
-     VALUES (?, ?, ?, ?, 'open', ?, ?, '2026-05-08', ?)`,
-  )
-    .bind(
-      partyId,
-      body.name.trim(),
-      body.description?.trim() || null,
-      user.id,
-      body.groupChatLink?.trim() || null,
-      JSON.stringify(body.languages),
-      now,
-    )
-    .run();
+  await db.insert(parties).values({
+    id: partyId,
+    name: body.name.trim(),
+    description: body.description?.trim() || null,
+    leaderId: user.id,
+    status: "open",
+    groupChatLink: body.groupChatLink?.trim() || null,
+    languages: JSON.stringify(body.languages),
+    autoPromoteDate: "2026-05-08",
+    createdAt: now,
+  });
 
-  await c.env.DB.prepare(
-    "INSERT INTO party_members (party_id, user_id, joined_at) VALUES (?, ?, ?)",
-  )
-    .bind(partyId, user.id, now)
-    .run();
+  await db.insert(partyMembers).values({
+    partyId,
+    userId: user.id,
+    joinedAt: now,
+  });
 
   return c.json({ ok: true, partyId });
 });
@@ -273,27 +293,30 @@ app.post("/api/parties/:partyId/join", async (c) => {
   if (!user) return c.json({ error: "Not authenticated" }, 401);
 
   const partyId = c.req.param("partyId");
-  const db = c.env.DB;
+  const db = getDb(c.env.DB);
 
   const party = await db
-    .prepare("SELECT status FROM parties WHERE id = ?")
-    .bind(partyId)
-    .first<{ status: string }>();
+    .select({ status: parties.status })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
 
   if (!party) return c.json({ error: "Party not found" }, 404);
   if (party.status === "locked") return c.json({ error: "party_locked" }, 409);
 
   const existing = await db
-    .prepare("SELECT 1 FROM party_members WHERE party_id = ? AND user_id = ?")
-    .bind(partyId, user.id)
-    .first();
+    .select({ partyId: partyMembers.partyId })
+    .from(partyMembers)
+    .where(and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, user.id)))
+    .get();
 
   if (existing) return c.json({ error: "already_a_member" }, 409);
 
-  await db
-    .prepare("INSERT INTO party_members (party_id, user_id, joined_at) VALUES (?, ?, ?)")
-    .bind(partyId, user.id, Math.floor(Date.now() / 1000))
-    .run();
+  await db.insert(partyMembers).values({
+    partyId,
+    userId: user.id,
+    joinedAt: new Date(),
+  });
 
   return c.json({ ok: true });
 });
@@ -303,7 +326,7 @@ app.post("/api/parties/:partyId/claims", async (c) => {
   if (!user) return c.json({ error: "Not authenticated" }, 401);
 
   const partyId = c.req.param("partyId");
-  const db = c.env.DB;
+  const db = getDb(c.env.DB);
 
   const body = await c.req.json<{
     characterId: number;
@@ -318,62 +341,85 @@ app.post("/api/parties/:partyId/claims", async (c) => {
   }
 
   const party = await db
-    .prepare("SELECT status FROM parties WHERE id = ?")
-    .bind(partyId)
-    .first<{ status: string }>();
+    .select({ status: parties.status })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
 
   if (!party) return c.json({ error: "Party not found" }, 404);
   if (party.status === "locked") return c.json({ error: "party_locked" }, 409);
 
   const member = await db
-    .prepare("SELECT 1 FROM party_members WHERE party_id = ? AND user_id = ?")
-    .bind(partyId, user.id)
-    .first();
+    .select({ partyId: partyMembers.partyId })
+    .from(partyMembers)
+    .where(and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, user.id)))
+    .get();
 
   if (!member) return c.json({ error: "not_a_member" }, 403);
 
   if (claimType === "claimed") {
     const existingUserClaim = await db
-      .prepare(
-        "SELECT 1 FROM character_claims WHERE party_id = ? AND user_id = ? AND claim_type = 'claimed'",
+      .select({ id: characterClaims.id })
+      .from(characterClaims)
+      .where(
+        and(
+          eq(characterClaims.partyId, partyId),
+          eq(characterClaims.userId, user.id),
+          eq(characterClaims.claimType, "claimed"),
+        ),
       )
-      .bind(partyId, user.id)
-      .first();
+      .get();
     if (existingUserClaim) return c.json({ error: "user_already_claimed_another" }, 409);
 
     const existingCharClaim = await db
-      .prepare(
-        "SELECT 1 FROM character_claims WHERE party_id = ? AND character_id = ? AND claim_type = 'claimed'",
+      .select({ id: characterClaims.id })
+      .from(characterClaims)
+      .where(
+        and(
+          eq(characterClaims.partyId, partyId),
+          eq(characterClaims.characterId, characterId),
+          eq(characterClaims.claimType, "claimed"),
+        ),
       )
-      .bind(partyId, characterId)
-      .first();
+      .get();
     if (existingCharClaim) return c.json({ error: "character_already_claimed" }, 409);
 
     await db
-      .prepare(
-        "DELETE FROM character_claims WHERE party_id = ? AND character_id = ? AND claim_type = 'conditional'",
-      )
-      .bind(partyId, characterId)
-      .run();
+      .delete(characterClaims)
+      .where(
+        and(
+          eq(characterClaims.partyId, partyId),
+          eq(characterClaims.characterId, characterId),
+          eq(characterClaims.claimType, "conditional"),
+        ),
+      );
   }
 
   if (claimType === "conditional") {
     const existingCond = await db
-      .prepare(
-        "SELECT 1 FROM character_claims WHERE party_id = ? AND character_id = ? AND claim_type = 'conditional'",
+      .select({ id: characterClaims.id })
+      .from(characterClaims)
+      .where(
+        and(
+          eq(characterClaims.partyId, partyId),
+          eq(characterClaims.characterId, characterId),
+          eq(characterClaims.claimType, "conditional"),
+        ),
       )
-      .bind(partyId, characterId)
-      .first();
+      .get();
     if (existingCond) return c.json({ error: "character_already_has_conditional" }, 409);
   }
 
   const claimId = crypto.randomUUID();
-  await db
-    .prepare(
-      "INSERT INTO character_claims (id, party_id, character_id, user_id, claim_type, rank, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(claimId, partyId, characterId, user.id, claimType, rank ?? null, Math.floor(Date.now() / 1000))
-    .run();
+  await db.insert(characterClaims).values({
+    id: claimId,
+    partyId,
+    characterId,
+    userId: user.id,
+    claimType,
+    rank: rank ?? null,
+    createdAt: new Date(),
+  });
 
   return c.json({ ok: true, claimId });
 });
@@ -384,20 +430,29 @@ app.get("/api/my-parties", async (c) => {
   const user = await getSessionUser(c.req.raw, c.env);
   if (!user) return c.json({ parties: [] });
 
-  const result = await c.env.DB.prepare(
-    `SELECT
-       p.id, p.name, p.status, p.languages, p.leader_id, p.created_at,
-       (SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = p.id) AS member_count,
-       (SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = p.id AND cc.claim_type = 'claimed') AS claimed_count
-     FROM parties p
-     JOIN party_members pm ON pm.party_id = p.id
-     WHERE pm.user_id = ?
-     ORDER BY p.created_at DESC`,
-  )
-    .bind(user.id)
-    .all();
+  const db = getDb(c.env.DB);
 
-  return c.json({ parties: result.results });
+  const partyIdRef = sql.raw('"parties"."id"');
+  const memberCountSq = sql<number>`(SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = ${partyIdRef})`.as("memberCount");
+  const claimedCountSq = sql<number>`(SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = ${partyIdRef} AND cc.claim_type = 'claimed')`.as("claimedCount");
+
+  const rows = await db
+    .select({
+      id: parties.id,
+      name: parties.name,
+      status: parties.status,
+      languages: parties.languages,
+      leaderId: parties.leaderId,
+      createdAt: parties.createdAt,
+      memberCount: memberCountSq,
+      claimedCount: claimedCountSq,
+    })
+    .from(parties)
+    .innerJoin(partyMembers, eq(partyMembers.partyId, parties.id))
+    .where(eq(partyMembers.userId, user.id))
+    .orderBy(sql`${parties.createdAt} DESC`);
+
+  return c.json({ parties: rows });
 });
 
 // ─── SPA fallback: serve static assets via Workers Sites ────
