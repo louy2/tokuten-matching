@@ -81,7 +81,9 @@ export type ClaimError =
   | "user_already_prefers_this_character"
   | "party_locked"
   | "not_a_member"
-  | "invalid_character";
+  | "invalid_character"
+  | "claim_not_found"
+  | "not_claim_owner";
 
 /**
  * Validate whether a new claim can be placed, reading current state from D1.
@@ -290,4 +292,74 @@ export async function autoPromote(
   }
 
   return { promotedCount: toPromote.length, eventIds };
+}
+
+// ─── Cancel ──────────────────────────────────────────────
+
+export type CancelClaimError = "claim_not_found" | "not_claim_owner" | "party_locked" | "not_a_member";
+
+/**
+ * Cancel a conditional or full claim. Only the claim owner can cancel.
+ * Returns the event ID on success, or an error string.
+ */
+export async function cancelClaim(
+  db: DrizzleD1Database,
+  partyId: string,
+  userId: string,
+  characterId: number,
+  claimType: "conditional" | "claimed",
+): Promise<{ eventId: string } | { error: CancelClaimError }> {
+  // Check party status
+  const party = await db
+    .select({ status: parties.status })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+  if (party?.status === "locked") return { error: "party_locked" };
+
+  // Check membership
+  const membership = await db
+    .select()
+    .from(partyMembers)
+    .where(
+      and(
+        eq(partyMembers.partyId, partyId),
+        eq(partyMembers.userId, userId),
+      ),
+    )
+    .get();
+  if (!membership) return { error: "not_a_member" };
+
+  // Find the claim
+  const claim = await db
+    .select()
+    .from(characterClaims)
+    .where(
+      and(
+        eq(characterClaims.partyId, partyId),
+        eq(characterClaims.characterId, characterId),
+        eq(characterClaims.userId, userId),
+        eq(characterClaims.claimType, claimType),
+      ),
+    )
+    .get();
+
+  if (!claim) return { error: "claim_not_found" };
+
+  // Delete the claim
+  await db.delete(characterClaims).where(eq(characterClaims.id, claim.id));
+
+  // Log event
+  const eventId = await appendEvent(db, {
+    partyId,
+    userId,
+    type: "claim_cancelled",
+    payload: {
+      claimId: claim.id,
+      characterId,
+      claimType,
+    },
+  });
+
+  return { eventId };
 }

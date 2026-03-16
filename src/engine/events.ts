@@ -10,6 +10,7 @@ export type EventType =
   | "claim_placed"
   | "claim_displaced"
   | "claim_promoted"
+  | "claim_cancelled"
   | "party_created"
   | "party_locked";
 
