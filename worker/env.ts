@@ -6,5 +6,4 @@ export interface Env {
   DISCORD_CLIENT_SECRET: string;
   DISCORD_REDIRECT_URI: string;
   DISCORD_BOT_TOKEN: string;
-  CRON_SECRET: string;
 }

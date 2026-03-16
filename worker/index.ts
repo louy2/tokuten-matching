@@ -392,7 +392,7 @@ app.get("/api/my-parties", async (c) => {
   return c.json({ parties: result.results });
 });
 
-// ─── Cron: send reminders (also callable via POST) ──────────
+// ─── Cron: send reminders ───────────────────────────────────
 
 const REMINDER_DAYS = [30, 14, 3, 0];
 
@@ -485,15 +485,6 @@ async function sendReminders(env: Env): Promise<{ sent: number; skipped: number;
 
   return { sent, skipped, total: parties.results.length };
 }
-
-app.post("/api/cron/send-reminders", async (c) => {
-  const auth = c.req.header("Authorization");
-  if (auth !== `Bearer ${c.env.CRON_SECRET}`) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  const result = await sendReminders(c.env);
-  return c.json(result);
-});
 
 // ─── SPA fallback: serve static assets via Workers Sites ────
 
