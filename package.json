@@ -13,7 +13,9 @@
     "db:migrate:local": "wrangler d1 migrations apply tokuten-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply tokuten-db --remote",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "alloy:install": "mkdir -p tools && curl -L -o tools/alloy.jar https://repo1.maven.org/maven2/org/alloytools/org.alloytools.alloy.dist/6.2.0/org.alloytools.alloy.dist-6.2.0.jar",
+    "alloy": "java -jar tools/alloy.jar"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
