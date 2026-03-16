@@ -10,6 +10,7 @@ import {
   partyMembers,
   characterClaims,
 } from "../src/db/schema";
+import { validateClaim, placeClaim } from "../src/engine/claims";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -336,108 +337,28 @@ app.post("/api/parties/:partyId/claims", async (c) => {
 
   const { characterId, claimType, rank } = body;
 
-  if (!Number.isInteger(characterId) || characterId < 1 || characterId > 12) {
-    return c.json({ error: "invalid_character" }, 400);
-  }
-
-  const party = await db
-    .select({ status: parties.status })
-    .from(parties)
-    .where(eq(parties.id, partyId))
-    .get();
-
-  if (!party) return c.json({ error: "Party not found" }, 404);
-  if (party.status === "locked") return c.json({ error: "party_locked" }, 409);
-
-  const member = await db
-    .select({ partyId: partyMembers.partyId })
-    .from(partyMembers)
-    .where(and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, user.id)))
-    .get();
-
-  if (!member) return c.json({ error: "not_a_member" }, 403);
-
-  if (claimType === "claimed") {
-    const existingUserClaim = await db
-      .select({ id: characterClaims.id })
-      .from(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.userId, user.id),
-          eq(characterClaims.claimType, "claimed"),
-        ),
-      )
-      .get();
-    if (existingUserClaim) return c.json({ error: "user_already_claimed_another" }, 409);
-
-    const existingCharClaim = await db
-      .select({ id: characterClaims.id })
-      .from(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.characterId, characterId),
-          eq(characterClaims.claimType, "claimed"),
-        ),
-      )
-      .get();
-    if (existingCharClaim) return c.json({ error: "character_already_claimed" }, 409);
-
-    await db
-      .delete(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.characterId, characterId),
-          eq(characterClaims.claimType, "conditional"),
-        ),
-      );
-  }
-
-  if (claimType === "preference") {
-    const existingPref = await db
-      .select({ id: characterClaims.id })
-      .from(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.characterId, characterId),
-          eq(characterClaims.userId, user.id),
-          eq(characterClaims.claimType, "preference"),
-        ),
-      )
-      .get();
-    if (existingPref) return c.json({ error: "user_already_prefers_this_character" }, 409);
-  }
-
-  if (claimType === "conditional") {
-    const existingCond = await db
-      .select({ id: characterClaims.id })
-      .from(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.characterId, characterId),
-          eq(characterClaims.claimType, "conditional"),
-        ),
-      )
-      .get();
-    if (existingCond) return c.json({ error: "character_already_has_conditional" }, 409);
-  }
-
-  const claimId = crypto.randomUUID();
-  await db.insert(characterClaims).values({
-    id: claimId,
-    partyId,
-    characterId,
+  const error = await validateClaim(db, partyId, {
     userId: user.id,
+    characterId,
     claimType,
-    rank: rank ?? null,
-    createdAt: new Date(),
   });
 
-  return c.json({ ok: true, claimId });
+  if (error) {
+    const status = error === "not_a_member" ? 403
+      : error === "invalid_character" ? 400
+      : 409;
+    return c.json({ error }, status);
+  }
+
+  const result = await placeClaim(db, partyId, {
+    id: crypto.randomUUID(),
+    userId: user.id,
+    characterId,
+    claimType,
+    rank: rank ?? null,
+  });
+
+  return c.json({ ok: true, claimId: result.claimId });
 });
 
 // ─── My parties ─────────────────────────────────────────────
