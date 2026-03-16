@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { useFetch, postApi } from "../hooks/useApi";
+import { useFetch, postApi, deleteApi } from "../hooks/useApi";
 import { useAuth } from "../hooks/useAuth";
 import { useCharacterName } from "../hooks/useCharacterName";
 import { CHARACTERS, SET_PRICE_YEN, type Character } from "../shared/characters";
@@ -175,6 +175,23 @@ export function PartyDetail() {
     }
   }
 
+  async function handleCancelClaim(characterId: number, claimType: "conditional" | "claimed") {
+    if (!partyId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await deleteApi(`/api/parties/${partyId}/claims`, {
+        characterId,
+        claimType,
+      });
+      await refetch();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to cancel claim");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -279,6 +296,7 @@ export function PartyDetail() {
               userId={user?.id ?? null}
               userHasClaimed={userHasClaimed}
               onClaim={handleClaim}
+              onCancelClaim={handleCancelClaim}
               actionLoading={actionLoading}
               t={t}
             />
@@ -351,6 +369,7 @@ interface CharacterCardProps {
   userId: string | null;
   userHasClaimed: boolean;
   onClaim: (characterId: number, claimType: ClaimType, rank?: number) => void;
+  onCancelClaim: (characterId: number, claimType: "conditional" | "claimed") => void;
   actionLoading: boolean;
   t: (key: string) => string;
 }
@@ -364,6 +383,7 @@ function CharacterCard({
   userId,
   userHasClaimed,
   onClaim,
+  onCancelClaim,
   actionLoading,
   t,
 }: CharacterCardProps) {
@@ -374,6 +394,8 @@ function CharacterCard({
     isMember && isOpen && slot.state === "open" &&
     !slot.conditionals.some((c) => c.userId === userId);
   const canPreference = isMember && isOpen;
+  const userHasConditionalHere = isMember && isOpen && slot.conditionals.some((c) => c.userId === userId);
+  const userHasClaimedHere = isMember && isOpen && slot.claimedBy?.userId === userId;
 
   return (
     <div
@@ -497,6 +519,30 @@ function CharacterCard({
                   className="text-xs px-2.5 py-1 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/40 disabled:opacity-50"
                 >
                   {t("partyDetail.fullClaim")}
+                </button>
+              )}
+              {userHasConditionalHere && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancelClaim(slot.characterId, "conditional");
+                  }}
+                  disabled={actionLoading}
+                  className="text-xs px-2.5 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/40 disabled:opacity-50"
+                >
+                  {t("partyDetail.cancelConditional")}
+                </button>
+              )}
+              {userHasClaimedHere && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancelClaim(slot.characterId, "claimed");
+                  }}
+                  disabled={actionLoading}
+                  className="text-xs px-2.5 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/40 disabled:opacity-50"
+                >
+                  {t("partyDetail.cancelClaim")}
                 </button>
               )}
             </div>

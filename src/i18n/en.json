@@ -53,6 +53,8 @@
     "addPreference": "Add preference",
     "conditionalClaim": "Conditional claim",
     "fullClaim": "Full claim",
+    "cancelConditional": "Cancel conditional",
+    "cancelClaim": "Cancel claim",
     "leader": "Leader",
     "leaderPanel": "Leader Panel",
     "leaderInfo": "As the party leader, you can manage members and lock the party when everyone is ready.",

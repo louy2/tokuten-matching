@@ -53,6 +53,8 @@
     "addPreference": "希望を追加",
     "conditionalClaim": "仮確定",
     "fullClaim": "本確定",
+    "cancelConditional": "仮確定を取消",
+    "cancelClaim": "確定を取消",
     "leader": "リーダー",
     "leaderPanel": "リーダーパネル",
     "leaderInfo": "リーダーとして、メンバーの管理や全員の準備ができたらパーティーをロックできます。",
