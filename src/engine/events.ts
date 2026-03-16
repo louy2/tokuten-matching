@@ -62,7 +62,7 @@ export async function appendEvent(
 export function buildEventInsert(
   db: DrizzleD1Database,
   event: EventInput,
-): { query: ReturnType<typeof db.insert>; id: string } {
+) {
   const id = uuidv7();
   const query = db.insert(events).values({
     id,

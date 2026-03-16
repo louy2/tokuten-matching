@@ -1,9 +1,8 @@
 import { eq, and } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { characterClaims, events, parties, partyMembers } from "../db/schema";
+import { characterClaims, parties, partyMembers } from "../db/schema";
 import type { ClaimType } from "../shared/types";
-import { appendEvent, buildEventInsert } from "./events";
-import { uuidv7 } from "../shared/uuidv7";
+import { buildEventInsert } from "./events";
 
 /**
  * The resolved state of a single character slot within a party.
