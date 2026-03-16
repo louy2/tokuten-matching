@@ -401,6 +401,9 @@ app.get("/api/*", (c) => c.json({ error: "Not found" }, 404));
 
 app.all("/api/*", (c) => c.json({ error: "Method not allowed" }, 405));
 
+// Serve static assets / SPA fallback for all non-API routes
+app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+
 // ─── Export ─────────────────────────────────────────────────
 
 export default {
