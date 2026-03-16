@@ -93,12 +93,13 @@ fact DisplacementRule {
       c2.party = p and c2.character = ch and c2.claimType = Conditional)
 }
 
-fact UniquePreferenceRankPerUserPerParty {
-  all p : Party, u : User |
-    all disj c1, c2 : CharacterClaim |
-      (c1.party = p and c1.owner = u and c1.claimType = Preference and
-       c2.party = p and c2.owner = u and c2.claimType = Preference)
-      implies c1.rank != c2.rank
+-- Preference is a partial ranking: not all characters need a rank,
+-- two characters CAN share the same rank, but a user can only rank
+-- a given character once per party.
+fact AtMostOnePreferencePerUserPerCharacterPerParty {
+  all p : Party, u : User, ch : Character |
+    lone c : CharacterClaim |
+      c.party = p and c.owner = u and c.character = ch and c.claimType = Preference
 }
 
 -- Assertions (properties to verify)
@@ -155,6 +156,13 @@ assert PreferenceRanksPositive {
     c.claimType = Preference implies c.rank >= 1
 }
 
+-- 9. One preference per user per character per party
+assert OnePreferencePerUserCharacter {
+  all p : Party, u : User, ch : Character |
+    #{c : CharacterClaim |
+      c.party = p and c.owner = u and c.character = ch and c.claimType = Preference} <= 1
+}
+
 -- Commands
 
 -- Show a sample valid instance with all three claim types
@@ -175,4 +183,5 @@ check ConditionalExclusivity  for 8 but 3 Party, 6 User, 6 Character, 10 Charact
 check DisplacementInvariant   for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check LeaderMembership        for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check PartySizeBound          for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check PreferenceRanksPositive for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check PreferenceRanksPositive      for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check OnePreferencePerUserCharacter for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
