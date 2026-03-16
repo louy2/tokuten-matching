@@ -395,6 +395,22 @@ app.post("/api/parties/:partyId/claims", async (c) => {
       );
   }
 
+  if (claimType === "preference") {
+    const existingPref = await db
+      .select({ id: characterClaims.id })
+      .from(characterClaims)
+      .where(
+        and(
+          eq(characterClaims.partyId, partyId),
+          eq(characterClaims.characterId, characterId),
+          eq(characterClaims.userId, user.id),
+          eq(characterClaims.claimType, "preference"),
+        ),
+      )
+      .get();
+    if (existingPref) return c.json({ error: "user_already_prefers_this_character" }, 409);
+  }
+
   if (claimType === "conditional") {
     const existingCond = await db
       .select({ id: characterClaims.id })

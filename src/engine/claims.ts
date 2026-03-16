@@ -78,6 +78,7 @@ export type ClaimError =
   | "user_already_claimed_another"
   | "character_already_has_conditional"
   | "user_already_conditional_this_character"
+  | "user_already_prefers_this_character"
   | "party_locked"
   | "not_a_member"
   | "invalid_character";
@@ -134,6 +135,16 @@ export async function validateClaim(
       )
     )
       return "user_already_claimed_another";
+  }
+
+  if (newClaim.claimType === "preference") {
+    if (
+      forChar.some(
+        (c) =>
+          c.userId === newClaim.userId && c.claimType === "preference",
+      )
+    )
+      return "user_already_prefers_this_character";
   }
 
   if (newClaim.claimType === "conditional") {
