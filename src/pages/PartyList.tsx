@@ -8,9 +8,9 @@ interface PartyRow {
   id: string;
   name: string;
   languages: string;
-  created_at: number;
-  member_count: number;
-  claimed_count?: number;
+  createdAt: string;
+  memberCount: number;
+  claimedCount?: number;
 }
 
 const LANGUAGE_OPTIONS: { code: Language | ""; label: string; labelEn: string }[] = [
@@ -86,7 +86,7 @@ export function PartyList() {
               return [];
             }
           })();
-          const openSlots = 12 - (party.claimed_count ?? 0);
+          const openSlots = 12 - (party.claimedCount ?? 0);
 
           return (
             <Link
@@ -109,7 +109,7 @@ export function PartyList() {
                   </div>
                 </div>
                 <div className="text-right text-sm text-gray-500 dark:text-gray-400">
-                  <div>{t("partyList.members", { count: party.member_count })}</div>
+                  <div>{t("partyList.members", { count: party.memberCount })}</div>
                   <div className={openSlots > 0 ? "text-green-600 dark:text-green-400" : "text-gray-400"}>
                     {t("partyList.openSlots", { count: openSlots })}
                   </div>

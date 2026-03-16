@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { env } from "cloudflare:test";
 import { listOpenParties, joinParty, otherParties, costPerPerson, isAutoPromoteDue } from "../parties";
 import { validateClaim, placeClaim, resolveSlots, autoPromote } from "../claims";
 import { getPartyEventLog, appendEvent } from "../events";
@@ -47,19 +46,19 @@ describe("E2E: Golden path — 12 fans fill a party and buy the set", () => {
   it("BROWSE → JOIN → RECORD → verify cost split → verify event log", async () => {
     // ── PHASE 1: BROWSE ──
     // The party should appear in listings
-    const openParties = await listOpenParties(env.DB);
+    const openParties = await listOpenParties(db);
     const listed = openParties.find((p) => p.id === PARTY);
     expect(listed).toBeDefined();
     expect(listed!.languages).toEqual(["ja", "en"]);
     expect(listed!.memberCount).toBe(1); // just the leader
 
     // Searchable by either language
-    const jaParties = await listOpenParties(env.DB, { language: "ja" });
+    const jaParties = await listOpenParties(db, { language: "ja" });
     expect(jaParties.some((p) => p.id === PARTY)).toBe(true);
-    const enParties = await listOpenParties(env.DB, { language: "en" });
+    const enParties = await listOpenParties(db, { language: "en" });
     expect(enParties.some((p) => p.id === PARTY)).toBe(true);
     // Not found in zh
-    const zhParties = await listOpenParties(env.DB, { language: "zh" });
+    const zhParties = await listOpenParties(db, { language: "zh" });
     expect(zhParties.some((p) => p.id === PARTY)).toBe(false);
 
     // ── PHASE 2: JOIN ──
@@ -71,7 +70,7 @@ describe("E2E: Golden path — 12 fans fill a party and buy the set", () => {
     }
 
     // Party now shows 12 members in browse
-    const refreshed = await listOpenParties(env.DB);
+    const refreshed = await listOpenParties(db);
     expect(refreshed.find((p) => p.id === PARTY)!.memberCount).toBe(12);
 
     // Multi-party transparency: leader is only in this party
@@ -420,7 +419,7 @@ describe("E2E: Locked party rejects joins and claims", () => {
     expect(claimErr).toBe("party_locked");
 
     // Party doesn't appear in open listings
-    const openParties = await listOpenParties(env.DB);
+    const openParties = await listOpenParties(db);
     expect(openParties.some((p) => p.id === PARTY)).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 name = "tokuten-matching"
 compatibility_date = "2026-03-15"
-pages_build_output_dir = "dist"
+main = "worker/index.ts"
+assets = { directory = "dist", binding = "ASSETS", not_found_handling = "single-page-application" }
 
 [[d1_databases]]
 binding = "DB"
@@ -11,3 +12,9 @@ migrations_dir = "drizzle"
 [[kv_namespaces]]
 binding = "SESSIONS"
 id = "d0988aa4a0a14956996680cd4cb72708"
+
+[observability]
+enabled = true
+
+[triggers]
+crons = ["0 0 * * *"]
