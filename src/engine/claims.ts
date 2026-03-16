@@ -75,7 +75,6 @@ export async function resolveSlots(
 
 export type ClaimError =
   | "character_already_claimed"
-  | "user_already_claimed_another"
   | "character_already_has_conditional"
   | "user_already_conditional_this_character"
   | "user_already_prefers_this_character"
@@ -83,7 +82,8 @@ export type ClaimError =
   | "not_a_member"
   | "invalid_character"
   | "claim_not_found"
-  | "not_claim_owner";
+  | "not_claim_owner"
+  | "invalid_rank";
 
 /**
  * Validate whether a new claim can be placed, reading current state from D1.
@@ -92,7 +92,7 @@ export type ClaimError =
 export async function validateClaim(
   db: DrizzleD1Database,
   partyId: string,
-  newClaim: { userId: string; characterId: number; claimType: ClaimType },
+  newClaim: { userId: string; characterId: number; claimType: ClaimType; rank?: number | null },
 ): Promise<ClaimError | null> {
   if (newClaim.characterId < 1 || newClaim.characterId > 12)
     return "invalid_character";
@@ -131,15 +131,11 @@ export async function validateClaim(
   if (newClaim.claimType === "claimed") {
     if (forChar.some((c) => c.claimType === "claimed"))
       return "character_already_claimed";
-    if (
-      existingClaims.some(
-        (c) => c.userId === newClaim.userId && c.claimType === "claimed",
-      )
-    )
-      return "user_already_claimed_another";
   }
 
   if (newClaim.claimType === "preference") {
+    if (newClaim.rank != null && newClaim.rank < 1)
+      return "invalid_rank";
     if (
       forChar.some(
         (c) =>
@@ -150,6 +146,8 @@ export async function validateClaim(
   }
 
   if (newClaim.claimType === "conditional") {
+    if (forChar.some((c) => c.claimType === "claimed"))
+      return "character_already_claimed";
     if (forChar.some((c) => c.claimType === "conditional"))
       return "character_already_has_conditional";
     if (

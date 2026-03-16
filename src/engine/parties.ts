@@ -174,7 +174,7 @@ export async function listOpenParties(
 
 // ─── Join ──────────────────────────────────────────────────
 
-export type JoinError = "party_locked" | "already_a_member" | "party_not_found";
+export type JoinError = "party_locked" | "already_a_member" | "party_not_found" | "party_full";
 
 export interface JoinResult {
   error: JoinError | null;
@@ -195,6 +195,14 @@ export async function joinParty(
 
   if (!party) return { error: "party_not_found" };
   if (party.status === "locked") return { error: "party_locked" };
+
+  // Check member count limit (max 12 per Alloy model PartySizeBound)
+  const memberCount = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(partyMembers)
+    .where(eq(partyMembers.partyId, partyId))
+    .get();
+  if (memberCount && memberCount.count >= 12) return { error: "party_full" };
 
   const existing = await db
     .select()

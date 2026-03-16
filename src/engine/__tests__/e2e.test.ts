@@ -548,9 +548,9 @@ describe("E2E: Duplicate and invalid operations are rejected", () => {
       id: nextId(), userId: "alice", characterId: 1, claimType: "claimed", rank: null,
     });
 
-    // Alice can't claim a second character
+    // Alice can claim a second character (multi-character claiming allowed)
     expect(await validateClaim(db, PARTY, { userId: "alice", characterId: 2, claimType: "claimed" }))
-      .toBe("user_already_claimed_another");
+      .toBeNull();
 
     // Bob can't claim the same character Alice claimed
     expect(await validateClaim(db, PARTY, { userId: "bob", characterId: 1, claimType: "claimed" }))
