@@ -259,6 +259,45 @@ export function costPerPerson(membersWithClaims: number): number {
   return Math.ceil(SET_PRICE_YEN / membersWithClaims);
 }
 
+// ─── Per-card cost split ──────────────────────────────────
+
+export function costPerCard(setPrice: number): number {
+  if (setPrice <= 0) return 0;
+  return Math.ceil(setPrice / 12);
+}
+
+export interface CostBreakdownMember {
+  userId: string;
+  count: number;
+  cost: number;
+}
+
+export interface CostBreakdownResult {
+  pricePerCard: number;
+  members: CostBreakdownMember[];
+  claimedTotal: number;
+  unallocated: number;
+}
+
+export function costBreakdown(
+  setPrice: number,
+  claims: { userId: string; count: number }[],
+): CostBreakdownResult {
+  const perCard = costPerCard(setPrice);
+  const members = claims.map((c) => ({
+    userId: c.userId,
+    count: c.count,
+    cost: c.count * perCard,
+  }));
+  const claimedTotal = members.reduce((sum, m) => sum + m.cost, 0);
+  return {
+    pricePerCard: perCard,
+    members,
+    claimedTotal,
+    unallocated: setPrice - claimedTotal,
+  };
+}
+
 // ─── Deadline / countdown ──────────────────────────────────
 
 const PREORDER_DATE = new Date("2026-05-15T00:00:00+09:00");

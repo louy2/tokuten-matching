@@ -44,7 +44,7 @@ describe("RECORD — placing preferences", () => {
 
     const slots = await resolveSlots(db, PARTY);
     const slot3 = slots.find((s) => s.characterId === 3)!;
-    expect(slot3.state).toBe("open"); // preferences don't change state
+    expect(slot3.state).toBe("wanted"); // preferences make it "wanted"
     expect(slot3.preferences).toHaveLength(2);
     expect(slot3.preferences[0].userId).toBe("alice");
     expect(slot3.preferences[1].userId).toBe("bob");
@@ -71,12 +71,12 @@ describe("RECORD — placing conditional claims", () => {
     expect(err).toBeNull();
   });
 
-  it("rejects second conditional on same character", async () => {
+  it("allows second conditional on same character from different user (contested)", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 5, userId: "alice", claimType: "conditional" });
     const err = await validateClaim(db, PARTY, {
       userId: "bob", characterId: 5, claimType: "conditional",
     });
-    expect(err).toBe("character_already_has_conditional");
+    expect(err).toBeNull();
   });
 
   it("allows a user to have conditional claims on different characters", async () => {
@@ -116,12 +116,12 @@ describe("RECORD — placing full claims", () => {
     expect(err).toBe("character_already_claimed");
   });
 
-  it("allows a user to claim multiple characters", async () => {
+  it("rejects second full claim from same user (max 1 per party)", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
     const err = await validateClaim(db, PARTY, {
       userId: "alice", characterId: 2, claimType: "claimed",
     });
-    expect(err).toBeNull();
+    expect(err).toBe("user_already_has_full_claim");
   });
 
   it("displaces a conditional when someone full-claims via placeClaim", async () => {

@@ -3,7 +3,20 @@
  *
  * Domain: fans form Parties of up to 12 people to split-buy a limited
  * tokuten set containing 12 character cards.  Each character slot moves
- * through: open -> conditional -> claimed (or contested when 2+ conditionals).
+ * through: open -> wanted -> conditional -> claimed (or contested when
+ * 2+ conditionals).
+ *
+ * Character Slot States (derived from claims):
+ *   OPEN       – no preferences, no conditional, no claimed
+ *   WANTED     – 1+ preferences exist, but no conditional or claimed
+ *   CONDITIONAL – exactly one conditional claim
+ *   CONTESTED  – 2+ conditional claims (needs discussion)
+ *   CLAIMED    – someone has a full "claimed" on this character
+ *
+ * Per-user limits:
+ *   - At most 1 full claim per user per party
+ *   - Unlimited conditional claims across different characters
+ *   - At most 1 conditional per user per character per party
  *
  * We model the *static* data invariants that the application must maintain
  * at every observable state, then ask Alloy to check them.
@@ -26,7 +39,8 @@ sig User {}
 sig Party {
   status   : one PartyStatus,
   leader   : one User,
-  members  : set User
+  members  : set User,
+  setPrice : one Int       -- configurable per party (yen)
 }
 
 sig CharacterClaim {
@@ -71,10 +85,24 @@ fact AtMostOneClaimedPerCharacterPerParty {
       c.party = p and c.character = ch and c.claimType = Claimed
 }
 
-fact AtMostOneConditionalPerCharacterPerParty {
-  all p : Party, ch : Character |
+-- NEW: A user may hold at most one full claim per party.
+-- They can have unlimited conditionals across different characters.
+fact AtMostOneClaimedPerUserPerParty {
+  all p : Party, u : User |
     lone c : CharacterClaim |
-      c.party = p and c.character = ch and c.claimType = Conditional
+      c.party = p and c.owner = u and c.claimType = Claimed
+}
+
+-- NOTE: We deliberately removed AtMostOneConditionalPerCharacterPerParty.
+-- Multiple conditionals on the same character produce a "contested" state
+-- that must be resolved through external discussion.
+
+-- A user can only place one conditional per character per party
+-- (but different users CAN conditionally claim the same character).
+fact AtMostOneConditionalPerUserPerCharacterPerParty {
+  all p : Party, u : User, ch : Character |
+    lone c : CharacterClaim |
+      c.party = p and c.owner = u and c.character = ch and c.claimType = Conditional
 }
 
 fact DisplacementRule {
@@ -96,6 +124,11 @@ fact AtMostOnePreferencePerUserPerCharacterPerParty {
       c.party = p and c.owner = u and c.character = ch and c.claimType = Preference
 }
 
+-- Set price must be positive
+fact PositiveSetPrice {
+  all p : Party | p.setPrice > 0
+}
+
 -- Assertions (properties to verify)
 
 -- 1. No orphan claims: every claim belongs to a party member
@@ -110,14 +143,14 @@ assert ClaimedExclusivity {
       c.party = p and c.character = ch and c.claimType = Claimed} <= 1
 }
 
--- 3. Conditional exclusivity: at most one conditional per character per party
-assert ConditionalExclusivity {
-  all p : Party, ch : Character |
+-- 3. Per-user claim limit: at most one full claim per user per party
+assert OneClaimedPerUser {
+  all p : Party, u : User |
     #{c : CharacterClaim |
-      c.party = p and c.character = ch and c.claimType = Conditional} <= 1
+      c.party = p and c.owner = u and c.claimType = Claimed} <= 1
 }
 
--- 5. Displacement invariant: claimed and conditional never coexist on same character
+-- 4. Displacement invariant: claimed and conditional never coexist on same character
 assert DisplacementInvariant {
   no p : Party, ch : Character |
     (some c1 : CharacterClaim |
@@ -127,32 +160,39 @@ assert DisplacementInvariant {
       c2.party = p and c2.character = ch and c2.claimType = Conditional)
 }
 
--- 6. Leader is always a member
+-- 5. Leader is always a member
 assert LeaderMembership {
   all p : Party | p.leader in p.members
 }
 
--- 7. Party size bound
+-- 6. Party size bound
 assert PartySizeBound {
   all p : Party | #p.members <= 12
 }
 
--- 8. Preference ranks are positive
+-- 7. Preference ranks are positive
 assert PreferenceRanksPositive {
   all c : CharacterClaim |
     c.claimType = Preference implies c.rank >= 1
 }
 
--- 9. One preference per user per character per party
+-- 8. One preference per user per character per party
 assert OnePreferencePerUserCharacter {
   all p : Party, u : User, ch : Character |
     #{c : CharacterClaim |
       c.party = p and c.owner = u and c.character = ch and c.claimType = Preference} <= 1
 }
 
+-- 9. One conditional per user per character per party
+assert OneConditionalPerUserPerCharacter {
+  all p : Party, u : User, ch : Character |
+    #{c : CharacterClaim |
+      c.party = p and c.owner = u and c.character = ch and c.claimType = Conditional} <= 1
+}
+
 -- Commands
 
--- Show a sample valid instance with all three claim types
+-- Show a sample valid instance with all three claim types and contested state
 run ShowExample {
   #Party = 1
   #User >= 3
@@ -160,14 +200,18 @@ run ShowExample {
   some c : CharacterClaim | c.claimType = Claimed
   some c : CharacterClaim | c.claimType = Conditional
   some c : CharacterClaim | c.claimType = Preference
-} for 5 but exactly 1 Party, 4 User, 4 Character, 6 CharacterClaim, 5 Int
+  -- Show contested: 2 conditionals on same character
+  some ch : Character |
+    #{c : CharacterClaim | c.claimType = Conditional and c.character = ch} >= 2
+} for 5 but exactly 1 Party, 4 User, 4 Character, 8 CharacterClaim, 5 Int
 
 -- Check all assertions (5 Int = bitwidth 5, range -16..15, enough for <= 12)
-check NoOrphanClaims          for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check ClaimedExclusivity      for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check ConditionalExclusivity  for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check DisplacementInvariant   for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check LeaderMembership        for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check PartySizeBound          for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check PreferenceRanksPositive      for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check NoOrphanClaims               for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check ClaimedExclusivity            for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check OneClaimedPerUser             for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check DisplacementInvariant         for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check LeaderMembership              for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check PartySizeBound                for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check PreferenceRanksPositive       for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check OnePreferencePerUserCharacter for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check OneConditionalPerUserPerCharacter for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
