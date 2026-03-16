@@ -8,6 +8,7 @@ import type { DrizzleD1Database } from "drizzle-orm/d1";
 function makeEnv() {
   return {
     ...env,
+    ASSETS: { fetch: globalThis.fetch } as unknown as Fetcher,
     DISCORD_CLIENT_ID: "fake-client-id",
     DISCORD_CLIENT_SECRET: "fake-client-secret",
     DISCORD_REDIRECT_URI: "http://localhost/callback",
