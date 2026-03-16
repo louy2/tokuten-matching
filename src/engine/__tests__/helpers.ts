@@ -36,13 +36,14 @@ export async function insertUser(
   db: DrizzleD1Database,
   id?: string,
   displayName?: string,
+  overrides?: { oauthProvider?: string; oauthId?: string },
 ): Promise<string> {
   const uid = id ?? nextId("user");
   await db.insert(users).values({
     id: uid,
     displayName: displayName ?? uid,
-    oauthProvider: "google",
-    oauthId: `oauth-${uid}`,
+    oauthProvider: overrides?.oauthProvider ?? "google",
+    oauthId: overrides?.oauthId ?? `oauth-${uid}`,
     createdAt: new Date(),
   });
   return uid;
