@@ -11,6 +11,7 @@ import {
   characterClaims,
 } from "../src/db/schema";
 import { validateClaim, placeClaim, cancelClaim } from "../src/engine/claims";
+import { buildEventInsert } from "../src/engine/events";
 import { createParty, joinParty } from "../src/engine/parties";
 import { upsertUser } from "../src/engine/users";
 
@@ -186,10 +187,23 @@ app.put("/api/profile", async (c) => {
       return c.json({ error: "Invalid character preferences" }, 400);
     }
 
-    await db
-      .update(users)
-      .set({ characterPreferences: JSON.stringify(prefs) })
-      .where(eq(users.id, user.id));
+    const ev = buildEventInsert(db, {
+      partyId: null,
+      userId: user.id,
+      type: "user_profile_updated",
+      payload: {
+        userId: user.id,
+        characterPreferences: prefs,
+      },
+    });
+
+    await db.batch([
+      db
+        .update(users)
+        .set({ characterPreferences: JSON.stringify(prefs) })
+        .where(eq(users.id, user.id)),
+      ev.query,
+    ]);
   }
 
   return c.json({ ok: true });
