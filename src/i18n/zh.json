@@ -53,6 +53,8 @@
     "addPreference": "添加偏好",
     "conditionalClaim": "暂定",
     "fullClaim": "确认",
+    "cancelConditional": "取消暂定",
+    "cancelClaim": "取消确认",
     "leader": "队长",
     "leaderPanel": "队长面板",
     "leaderInfo": "作为队长，你可以管理成员，并在所有人准备好后锁定队伍。",

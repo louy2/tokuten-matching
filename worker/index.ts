@@ -10,6 +10,7 @@ import {
   partyMembers,
   characterClaims,
 } from "../src/db/schema";
+import { cancelClaim } from "../src/engine/claims";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -422,6 +423,42 @@ app.post("/api/parties/:partyId/claims", async (c) => {
   });
 
   return c.json({ ok: true, claimId });
+});
+
+app.delete("/api/parties/:partyId/claims", async (c) => {
+  const user = await getSessionUser(c.req.raw, c.env);
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  const partyId = c.req.param("partyId");
+  const db = getDb(c.env.DB);
+
+  const body = await c.req.json<{
+    characterId: number;
+    claimType: "conditional" | "claimed";
+  }>();
+
+  const { characterId, claimType } = body;
+
+  if (!Number.isInteger(characterId) || characterId < 1 || characterId > 12) {
+    return c.json({ error: "invalid_character" }, 400);
+  }
+
+  if (claimType !== "conditional" && claimType !== "claimed") {
+    return c.json({ error: "invalid_claim_type" }, 400);
+  }
+
+  const result = await cancelClaim(db, partyId, user.id, characterId, claimType);
+
+  if ("error" in result) {
+    const statusMap: Record<string, number> = {
+      party_locked: 409,
+      not_a_member: 403,
+      claim_not_found: 404,
+    };
+    return c.json({ error: result.error }, statusMap[result.error] as 409 ?? 400);
+  }
+
+  return c.json({ ok: true });
 });
 
 // ─── My parties ─────────────────────────────────────────────
