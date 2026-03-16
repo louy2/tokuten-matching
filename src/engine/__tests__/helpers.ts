@@ -42,7 +42,7 @@ export async function insertUser(
   await db.insert(users).values({
     id: uid,
     displayName: displayName ?? uid,
-    oauthProvider: overrides?.oauthProvider ?? "google",
+    oauthProvider: overrides?.oauthProvider ?? "discord",
     oauthId: overrides?.oauthId ?? `oauth-${uid}`,
     createdAt: new Date(),
   });

@@ -51,10 +51,7 @@ describe("sendReminders", () => {
   it("sends a reminder when party is at a milestone day", async () => {
     const fetchSpy = stubFetchSuccess();
 
-    const leaderId = await insertUser(db, "leader-1", "Leader", {
-      oauthProvider: "discord",
-      oauthId: "discord-123",
-    });
+    const leaderId = await insertUser(db, "leader-1", "Leader");
     const partyId = await insertParty(db, {
       leaderId,
       autoPromoteDate: daysFromNow(14),
@@ -75,10 +72,7 @@ describe("sendReminders", () => {
   it("skips parties not at a milestone day", async () => {
     const fetchSpy = stubFetchSuccess();
 
-    const leaderId = await insertUser(db, "leader-1", "Leader", {
-      oauthProvider: "discord",
-      oauthId: "discord-123",
-    });
+    const leaderId = await insertUser(db, "leader-1", "Leader");
     await insertParty(db, {
       leaderId,
       autoPromoteDate: daysFromNow(10), // not a milestone
@@ -94,10 +88,7 @@ describe("sendReminders", () => {
   it("skips if reminder was already sent (KV flag exists)", async () => {
     const fetchSpy = stubFetchSuccess();
 
-    const leaderId = await insertUser(db, "leader-1", "Leader", {
-      oauthProvider: "discord",
-      oauthId: "discord-123",
-    });
+    const leaderId = await insertUser(db, "leader-1", "Leader");
     const partyId = await insertParty(db, {
       leaderId,
       autoPromoteDate: daysFromNow(14),
@@ -117,7 +108,9 @@ describe("sendReminders", () => {
   it("skips if leader is not a Discord user", async () => {
     const fetchSpy = stubFetchSuccess();
 
-    const leaderId = await insertUser(db, "leader-1", "Leader"); // default: google
+    const leaderId = await insertUser(db, "leader-1", "Leader", {
+      oauthProvider: "other",
+    });
     await insertParty(db, {
       leaderId,
       autoPromoteDate: daysFromNow(14),
@@ -135,10 +128,7 @@ describe("sendReminders", () => {
       new Response("Unauthorized", { status: 401 }),
     );
 
-    const leaderId = await insertUser(db, "leader-fail", "Leader", {
-      oauthProvider: "discord",
-      oauthId: "discord-fail",
-    });
+    const leaderId = await insertUser(db, "leader-fail", "Leader");
     const partyId = await insertParty(db, {
       id: "party-fail",
       leaderId,
@@ -159,10 +149,7 @@ describe("sendReminders", () => {
   it("sends day-0 message with correct content", async () => {
     const fetchSpy = stubFetchSuccess();
 
-    const leaderId = await insertUser(db, "leader-1", "Leader", {
-      oauthProvider: "discord",
-      oauthId: "discord-123",
-    });
+    const leaderId = await insertUser(db, "leader-1", "Leader");
     const partyId = await insertParty(db, {
       name: "My Party",
       leaderId,
@@ -198,14 +185,8 @@ describe("sendReminders", () => {
   it("includes contested count in non-zero-day message", async () => {
     const fetchSpy = stubFetchSuccess();
 
-    const leaderId = await insertUser(db, "leader-1", "Leader", {
-      oauthProvider: "discord",
-      oauthId: "discord-123",
-    });
-    const user2 = await insertUser(db, "user-2", "User 2", {
-      oauthProvider: "discord",
-      oauthId: "discord-456",
-    });
+    const leaderId = await insertUser(db, "leader-1", "Leader");
+    const user2 = await insertUser(db, "user-2", "User 2");
     const partyId = await insertParty(db, {
       leaderId,
       autoPromoteDate: daysFromNow(3),
