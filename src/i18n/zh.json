@@ -1,0 +1,103 @@
+{
+  "appName": "特典配对",
+  "nav": {
+    "parties": "队伍列表",
+    "myParties": "我的队伍"
+  },
+  "home": {
+    "description": "寻找虹咲特典套装的拼购队伍。12人分摊¥21,600的套装。",
+    "findParty": "寻找队伍",
+    "createParty": "创建队伍",
+    "howItWorks": "使用方法",
+    "steps": {
+      "browse": {
+        "title": "浏览",
+        "description": "查找正在招募成员的队伍。可以按语言筛选。"
+      },
+      "join": {
+        "title": "加入",
+        "description": "加入队伍，通过群聊与其他粉丝联系。"
+      },
+      "discuss": {
+        "title": "讨论",
+        "description": "与队伍成员讨论谁想要哪个角色。"
+      },
+      "record": {
+        "title": "确认",
+        "description": "登记角色偏好并锁定你的选择。"
+      }
+    },
+    "setPrice": "虹咲特典套装",
+    "splitExample": "12人均摊 = 每人 ¥{{perPerson}}",
+    "characters": "12位角色"
+  },
+  "partyList": {
+    "empty": "未找到队伍。创建一个开始吧！",
+    "members": "{{count}}人",
+    "openSlots": "{{count}}个空位"
+  },
+  "partyDetail": {
+    "notFound": "未找到队伍",
+    "backToList": "返回队伍列表",
+    "statusOpen": "招募中",
+    "statusLocked": "已锁定",
+    "members": "成员",
+    "claimed": "已确认",
+    "perPerson": "每人",
+    "joinParty": "加入此队伍",
+    "loginToJoin": "登录以加入此队伍",
+    "groupChat": "打开群聊",
+    "characters": "角色",
+    "competing": "人竞争中",
+    "interested": "人感兴趣",
+    "addPreference": "添加偏好",
+    "conditionalClaim": "暂定",
+    "fullClaim": "确认",
+    "leader": "队长",
+    "leaderPanel": "队长面板",
+    "leaderInfo": "作为队长，你可以管理成员，并在所有人准备好后锁定队伍。",
+    "memberList": "成员"
+  },
+  "createParty": {
+    "title": "创建队伍",
+    "loginRequired": "登录以创建队伍。",
+    "name": "队伍名称",
+    "namePlaceholder": "例：虹咲特典拼购小队",
+    "description": "描述",
+    "descriptionPlaceholder": "介绍一下你的队伍…",
+    "languages": "语言",
+    "groupChatLink": "群聊链接",
+    "groupChatHint": "Discord、LINE或其他群聊邀请链接",
+    "submit": "创建队伍"
+  },
+  "myParties": {
+    "loginRequired": "登录以查看你的队伍。",
+    "empty": "你还没有加入任何队伍。"
+  },
+  "profile": {
+    "title": "个人资料",
+    "loginRequired": "登录以查看个人资料。",
+    "userId": "用户ID",
+    "avatar": "头像",
+    "logout": "退出登录"
+  },
+  "slotState": {
+    "open": "空闲",
+    "conditional": "暂定",
+    "contested": "竞争中",
+    "claimed": "已确认"
+  },
+  "claimType": {
+    "preference": "偏好",
+    "conditional": "暂定",
+    "claimed": "已确认"
+  },
+  "common": {
+    "comingSoon": "即将推出…",
+    "login": "登录",
+    "loading": "加载中…"
+  },
+  "footer": {
+    "text": "特典配对 — 与全球粉丝一起拼购虹咲特典"
+  }
+}

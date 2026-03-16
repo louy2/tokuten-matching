@@ -1,0 +1,103 @@
+{
+  "appName": "特典マッチング",
+  "nav": {
+    "parties": "パーティー一覧",
+    "myParties": "マイパーティー"
+  },
+  "home": {
+    "description": "ニジガク特典セットの共同購入パーティーを見つけよう。12人で¥21,600のセットを分け合えます。",
+    "findParty": "パーティーを探す",
+    "createParty": "パーティーを作る",
+    "howItWorks": "使い方",
+    "steps": {
+      "browse": {
+        "title": "探す",
+        "description": "メンバーを募集中のパーティーを探そう。言語でフィルターできます。"
+      },
+      "join": {
+        "title": "参加",
+        "description": "パーティーに参加して、グループチャットで他のファンとつながろう。"
+      },
+      "discuss": {
+        "title": "相談",
+        "description": "パーティーのメンバーと誰がどのキャラクターを欲しいか話し合おう。"
+      },
+      "record": {
+        "title": "確定",
+        "description": "キャラクターの希望を登録して、自分の担当を確定しよう。"
+      }
+    },
+    "setPrice": "ニジガク特典セット",
+    "splitExample": "12人で割ると1人あたり ¥{{perPerson}}",
+    "characters": "12人のキャラクター"
+  },
+  "partyList": {
+    "empty": "パーティーが見つかりません。作成して始めましょう！",
+    "members": "{{count}}人",
+    "openSlots": "{{count}}枠空き"
+  },
+  "partyDetail": {
+    "notFound": "パーティーが見つかりません",
+    "backToList": "パーティー一覧に戻る",
+    "statusOpen": "募集中",
+    "statusLocked": "確定済み",
+    "members": "メンバー",
+    "claimed": "確定済み",
+    "perPerson": "1人あたり",
+    "joinParty": "このパーティーに参加",
+    "loginToJoin": "ログインしてパーティーに参加",
+    "groupChat": "グループチャットを開く",
+    "characters": "キャラクター",
+    "competing": "人が競合中",
+    "interested": "人が希望中",
+    "addPreference": "希望を追加",
+    "conditionalClaim": "仮確定",
+    "fullClaim": "本確定",
+    "leader": "リーダー",
+    "leaderPanel": "リーダーパネル",
+    "leaderInfo": "リーダーとして、メンバーの管理や全員の準備ができたらパーティーをロックできます。",
+    "memberList": "メンバー"
+  },
+  "createParty": {
+    "title": "パーティーを作る",
+    "loginRequired": "ログインしてパーティーを作成してください。",
+    "name": "パーティー名",
+    "namePlaceholder": "例：ニジガク特典分け合い隊",
+    "description": "説明",
+    "descriptionPlaceholder": "パーティーについて説明しましょう…",
+    "languages": "言語",
+    "groupChatLink": "グループチャットリンク",
+    "groupChatHint": "Discord、LINE、その他のグループチャット招待リンク",
+    "submit": "パーティーを作成"
+  },
+  "myParties": {
+    "loginRequired": "ログインしてパーティーを確認してください。",
+    "empty": "まだパーティーに参加していません。"
+  },
+  "profile": {
+    "title": "プロフィール",
+    "loginRequired": "ログインしてプロフィールを表示してください。",
+    "userId": "ユーザーID",
+    "avatar": "アバター",
+    "logout": "ログアウト"
+  },
+  "slotState": {
+    "open": "空き",
+    "conditional": "仮確定",
+    "contested": "競合中",
+    "claimed": "確定済み"
+  },
+  "claimType": {
+    "preference": "希望",
+    "conditional": "仮確定",
+    "claimed": "確定済み"
+  },
+  "common": {
+    "comingSoon": "準備中…",
+    "login": "ログイン",
+    "loading": "読み込み中…"
+  },
+  "footer": {
+    "text": "特典マッチング — 世界中のファンとニジガク特典を分け合おう"
+  }
+}

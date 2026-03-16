@@ -1,0 +1,103 @@
+{
+  "appName": "Tokuten Matching",
+  "nav": {
+    "parties": "Parties",
+    "myParties": "My Parties"
+  },
+  "home": {
+    "description": "Find a group to split-buy the Nijigasaki tokuten set. Share a ¥21,600 set among up to 12 fans.",
+    "findParty": "Find a Party",
+    "createParty": "Create a Party",
+    "howItWorks": "How It Works",
+    "steps": {
+      "browse": {
+        "title": "Browse",
+        "description": "Find open parties looking for members. Filter by language."
+      },
+      "join": {
+        "title": "Join",
+        "description": "Join a party and connect with other fans via group chat."
+      },
+      "discuss": {
+        "title": "Discuss",
+        "description": "Talk with your party about who wants which character."
+      },
+      "record": {
+        "title": "Claim",
+        "description": "Record your character preferences and lock in your pick."
+      }
+    },
+    "setPrice": "Nijigasaki Tokuten Set",
+    "splitExample": "Split 12 ways = ¥{{perPerson}} per person",
+    "characters": "The 12 Characters"
+  },
+  "partyList": {
+    "empty": "No parties found. Create one to get started!",
+    "members": "{{count}} members",
+    "openSlots": "{{count}} open"
+  },
+  "partyDetail": {
+    "notFound": "Party not found",
+    "backToList": "Back to parties",
+    "statusOpen": "Open",
+    "statusLocked": "Locked",
+    "members": "Members",
+    "claimed": "Claimed",
+    "perPerson": "Per person",
+    "joinParty": "Join this Party",
+    "loginToJoin": "Log in to join this party",
+    "groupChat": "Open Group Chat",
+    "characters": "Characters",
+    "competing": "competing",
+    "interested": "interested",
+    "addPreference": "Add preference",
+    "conditionalClaim": "Conditional claim",
+    "fullClaim": "Full claim",
+    "leader": "Leader",
+    "leaderPanel": "Leader Panel",
+    "leaderInfo": "As the party leader, you can manage members and lock the party when everyone is ready.",
+    "memberList": "Members"
+  },
+  "createParty": {
+    "title": "Create a Party",
+    "loginRequired": "Log in to create a party.",
+    "name": "Party Name",
+    "namePlaceholder": "e.g. Niji Tokuten Squad",
+    "description": "Description",
+    "descriptionPlaceholder": "Tell people about your party...",
+    "languages": "Languages",
+    "groupChatLink": "Group Chat Link",
+    "groupChatHint": "Discord, LINE, or other group chat invite link",
+    "submit": "Create Party"
+  },
+  "myParties": {
+    "loginRequired": "Log in to see your parties.",
+    "empty": "You haven't joined any parties yet."
+  },
+  "profile": {
+    "title": "Profile",
+    "loginRequired": "Log in to view your profile.",
+    "userId": "User ID",
+    "avatar": "Avatar",
+    "logout": "Log Out"
+  },
+  "slotState": {
+    "open": "Open",
+    "conditional": "Conditional",
+    "contested": "Contested",
+    "claimed": "Claimed"
+  },
+  "claimType": {
+    "preference": "Preferences",
+    "conditional": "Conditional",
+    "claimed": "Claimed"
+  },
+  "common": {
+    "comingSoon": "Coming soon…",
+    "login": "Log In",
+    "loading": "Loading…"
+  },
+  "footer": {
+    "text": "Tokuten Matching — Split-buy Nijigasaki tokuten with fans worldwide"
+  }
+}
