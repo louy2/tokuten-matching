@@ -23,6 +23,7 @@ export const parties = sqliteTable("parties", {
   groupChatLink: text("group_chat_link"),
   languages: text("languages").notNull().default('["ja"]'), // JSON array: ["ja","en","zh"]
   autoPromoteDate: text("auto_promote_date").default("2026-05-08"),
+  mituoriBoardClaimedBy: text("mituori_board_claimed_by").references(() => users.id),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

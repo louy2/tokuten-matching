@@ -14,7 +14,9 @@ export type EventType =
   | "party_created"
   | "party_locked"
   | "user_created"
-  | "user_profile_updated";
+  | "user_profile_updated"
+  | "mituori_board_claimed"
+  | "mituori_board_unclaimed";
 
 export interface EventRow {
   id: string;

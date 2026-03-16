@@ -32,6 +32,7 @@ interface PartyData {
   groupChatLink: string | null;
   languages: string;
   autoPromoteDate: string | null;
+  mituoriBoardClaimedBy: string | null;
   members: MemberRow[];
   claims: ClaimRow[];
 }
@@ -203,6 +204,34 @@ export function PartyDetail() {
     }
   }
 
+  async function handleClaimBoard() {
+    if (!partyId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await postApi(`/api/parties/${partyId}/mituori-board`, {});
+      await refetch();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to claim board");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleUnclaimBoard() {
+    if (!partyId) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await deleteApi(`/api/parties/${partyId}/mituori-board`, {});
+      await refetch();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to unclaim board");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -291,6 +320,49 @@ export function PartyDetail() {
           {actionError}
         </div>
       )}
+
+      {/* Mituori Board */}
+      <div className={`p-4 rounded-lg border ${
+        party.mituoriBoardClaimedBy
+          ? "border-green-400 dark:border-green-500 bg-green-50 dark:bg-green-900/20"
+          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+      }`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">{t("partyDetail.mituoriBoard")}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {party.mituoriBoardClaimedBy
+                ? (() => {
+                    const claimer = party.members.find((m) => m.userId === party.mituoriBoardClaimedBy);
+                    return claimer?.displayName ?? t("partyDetail.mituoriBoardClaimed");
+                  })()
+                : t("partyDetail.mituoriBoardUnclaimed")}
+            </p>
+          </div>
+          {isMember && isOpen && (
+            <>
+              {!party.mituoriBoardClaimedBy && (
+                <button
+                  onClick={handleClaimBoard}
+                  disabled={actionLoading}
+                  className="text-xs px-3 py-1.5 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/40 disabled:opacity-50 font-medium"
+                >
+                  {t("partyDetail.claimBoard")}
+                </button>
+              )}
+              {party.mituoriBoardClaimedBy === user?.id && (
+                <button
+                  onClick={handleUnclaimBoard}
+                  disabled={actionLoading}
+                  className="text-xs px-3 py-1.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/40 disabled:opacity-50 font-medium"
+                >
+                  {t("partyDetail.unclaimBoard")}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Character Grid */}
       <div>

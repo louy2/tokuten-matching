@@ -58,7 +58,12 @@
     "leader": "リーダー",
     "leaderPanel": "リーダーパネル",
     "leaderInfo": "リーダーとして、メンバーの管理や全員の準備ができたらパーティーをロックできます。",
-    "memberList": "メンバー"
+    "memberList": "メンバー",
+    "mituoriBoard": "三つ折りボード",
+    "mituoriBoardUnclaimed": "まだ誰もボードを確保していません",
+    "mituoriBoardClaimed": "確保済み",
+    "claimBoard": "ボードを確保",
+    "unclaimBoard": "ボードの確保を取消"
   },
   "createParty": {
     "title": "パーティーを作る",
