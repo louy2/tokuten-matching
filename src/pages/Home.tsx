@@ -70,9 +70,13 @@ export function Home() {
           {CHARACTERS.map((char) => (
             <div
               key={char.id}
-              className="text-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg"
+              className="text-center p-3 border rounded-lg"
+              style={{ borderColor: `${char.color}40` }}
             >
-              <div className="w-10 h-10 mx-auto mb-1 rounded-full bg-gradient-to-br from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 flex items-center justify-center text-sm font-bold text-purple-600 dark:text-purple-400">
+              <div
+                className="w-10 h-10 mx-auto mb-1 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                style={{ backgroundColor: char.color }}
+              >
                 {char.id}
               </div>
               <div className="text-xs font-medium truncate">{charName(char.id)}</div>
