@@ -1,6 +1,7 @@
 import { eq, and, isNull, desc } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { events } from "../db/schema";
+import { uuidv7 } from "../shared/uuidv7";
 
 // ─── Event types ──────────────────────────────────────────
 
@@ -27,22 +28,22 @@ export interface EventRow {
 export async function appendEvent(
   db: DrizzleD1Database,
   event: {
-    id: string;
     partyId: string | null;
     userId: string;
     type: EventType;
     payload: Record<string, unknown>;
   },
 ): Promise<string> {
+  const id = uuidv7();
   await db.insert(events).values({
-    id: event.id,
+    id,
     partyId: event.partyId,
     userId: event.userId,
     type: event.type,
     payload: JSON.stringify(event.payload),
     createdAt: new Date(),
   });
-  return event.id;
+  return id;
 }
 
 // ─── Read ─────────────────────────────────────────────────

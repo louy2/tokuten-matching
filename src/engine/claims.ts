@@ -185,7 +185,6 @@ export async function placeClaim(
     for (const d of displaced) {
       await db.delete(characterClaims).where(eq(characterClaims.id, d.id));
       const eid = await appendEvent(db, {
-        id: `evt-displaced-${d.id}`,
         partyId,
         userId: claim.userId,
         type: "claim_displaced",
@@ -211,7 +210,6 @@ export async function placeClaim(
   });
 
   const eid = await appendEvent(db, {
-    id: `evt-claim-${claim.id}`,
     partyId,
     userId: claim.userId,
     type: "claim_placed",
@@ -268,7 +266,6 @@ export async function autoPromote(
       .where(eq(characterClaims.id, claim.id));
 
     const eid = await appendEvent(db, {
-      id: `evt-promoted-${claim.id}`,
       partyId,
       userId: claim.userId,
       type: "claim_promoted",

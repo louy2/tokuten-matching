@@ -104,7 +104,6 @@ export async function joinParty(
   });
 
   const eventId = await appendEvent(db, {
-    id: `evt-join-${partyId}-${userId}-${Date.now()}`,
     partyId,
     userId,
     type: "member_joined",

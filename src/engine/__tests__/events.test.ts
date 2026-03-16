@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
+import { events } from "../../db/schema";
 import { appendEvent, getPartyEventLog } from "../events";
 import { placeClaim } from "../claims";
 import { joinParty } from "../parties";
@@ -22,7 +24,6 @@ describe("Event log — append and read", () => {
 
   it("appendEvent writes and getPartyEventLog reads", async () => {
     await appendEvent(db, {
-      id: "e1",
       partyId: PARTY,
       userId: "leader",
       type: "party_created",
@@ -33,32 +34,30 @@ describe("Event log — append and read", () => {
     expect(log).toHaveLength(1);
     expect(log[0].type).toBe("party_created");
     expect(log[0].payload).toEqual({ partyId: PARTY });
+    // UUIDv7 format check
+    expect(log[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 
   it("excludes undone events by default", async () => {
-    await appendEvent(db, {
-      id: "e1",
+    const e1 = await appendEvent(db, {
       partyId: PARTY,
       userId: "leader",
       type: "party_created",
       payload: {},
     });
-    await appendEvent(db, {
-      id: "e2",
+    const e2 = await appendEvent(db, {
       partyId: PARTY,
       userId: "leader",
       type: "member_joined",
       payload: {},
     });
 
-    // Manually mark e1 as undone via raw update
-    const { events } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    await db.update(events).set({ undoneAt: new Date() }).where(eq(events.id, "e1"));
+    // Manually mark e1 as undone
+    await db.update(events).set({ undoneAt: new Date() }).where(eq(events.id, e1));
 
     const log = await getPartyEventLog(db, PARTY);
     expect(log).toHaveLength(1);
-    expect(log[0].id).toBe("e2");
+    expect(log[0].id).toBe(e2);
 
     const logAll = await getPartyEventLog(db, PARTY, { includeUndone: true });
     expect(logAll).toHaveLength(2);
@@ -155,7 +154,8 @@ describe("Undo — claim_placed", () => {
     const result = await placeClaim(db, PARTY, {
       id: "c1", userId: "alice", characterId: 1, claimType: "preference", rank: 1,
     });
-    const claimEventId = result.eventIds.find((id) => id.startsWith("evt-claim-"))!;
+    // The last event is the claim_placed (displacement events come first)
+    const claimEventId = result.eventIds[result.eventIds.length - 1];
 
     const undoResult = await undoEvent(db, claimEventId, "alice");
     expect(undoResult).toBe("ok");
@@ -174,7 +174,8 @@ describe("Undo — claim_placed", () => {
     const result = await placeClaim(db, PARTY, {
       id: "c2", userId: "bob", characterId: 7, claimType: "claimed", rank: null,
     });
-    const claimEventId = result.eventIds.find((id) => id.startsWith("evt-claim-"))!;
+    // Last event is claim_placed
+    const claimEventId = result.eventIds[result.eventIds.length - 1];
 
     // Bob undoes the full claim
     const undoResult = await undoEvent(db, claimEventId, "bob");
@@ -215,14 +216,13 @@ describe("Undo — claim_placed", () => {
   });
 
   it("rejects undo on non-undoable event types", async () => {
-    await appendEvent(db, {
-      id: "evt-lock",
+    const lockEventId = await appendEvent(db, {
       partyId: PARTY,
       userId: "leader",
       type: "party_locked",
       payload: {},
     });
-    const result = await undoEvent(db, "evt-lock", "leader");
+    const result = await undoEvent(db, lockEventId, "leader");
     expect(result).toBe("not_undoable");
   });
 });
@@ -266,17 +266,16 @@ describe("Replay — reconstruct state from events", () => {
   });
 
   it("replays member_joined and claim_placed events", async () => {
-    // These use insertMember (no events), so add events manually
     await appendEvent(db, {
-      id: "e1", partyId: PARTY, userId: "alice",
+      partyId: PARTY, userId: "alice",
       type: "member_joined", payload: { partyId: PARTY, userId: "alice" },
     });
     await appendEvent(db, {
-      id: "e2", partyId: PARTY, userId: "bob",
+      partyId: PARTY, userId: "bob",
       type: "member_joined", payload: { partyId: PARTY, userId: "bob" },
     });
     await appendEvent(db, {
-      id: "e3", partyId: PARTY, userId: "alice",
+      partyId: PARTY, userId: "alice",
       type: "claim_placed", payload: { claimId: "c1", characterId: 1, claimType: "conditional", rank: null },
     });
 
@@ -288,15 +287,15 @@ describe("Replay — reconstruct state from events", () => {
 
   it("displacement removes the displaced claim from replay state", async () => {
     await appendEvent(db, {
-      id: "e1", partyId: PARTY, userId: "alice",
+      partyId: PARTY, userId: "alice",
       type: "claim_placed", payload: { claimId: "c1", characterId: 3, claimType: "conditional", rank: null },
     });
     await appendEvent(db, {
-      id: "e2", partyId: PARTY, userId: "bob",
+      partyId: PARTY, userId: "bob",
       type: "claim_displaced", payload: { displacedClaimId: "c1", displacedUserId: "alice", characterId: 3, byUserId: "bob" },
     });
     await appendEvent(db, {
-      id: "e3", partyId: PARTY, userId: "bob",
+      partyId: PARTY, userId: "bob",
       type: "claim_placed", payload: { claimId: "c2", characterId: 3, claimType: "claimed", rank: null },
     });
 
@@ -308,11 +307,11 @@ describe("Replay — reconstruct state from events", () => {
 
   it("promotion changes claimType in replay state", async () => {
     await appendEvent(db, {
-      id: "e1", partyId: PARTY, userId: "alice",
+      partyId: PARTY, userId: "alice",
       type: "claim_placed", payload: { claimId: "c1", characterId: 5, claimType: "conditional", rank: null },
     });
     await appendEvent(db, {
-      id: "e2", partyId: PARTY, userId: "alice",
+      partyId: PARTY, userId: "alice",
       type: "claim_promoted", payload: { claimId: "c1", characterId: 5, userId: "alice" },
     });
 
@@ -323,18 +322,16 @@ describe("Replay — reconstruct state from events", () => {
 
   it("excludes undone events from replay", async () => {
     await appendEvent(db, {
-      id: "e1", partyId: PARTY, userId: "alice",
+      partyId: PARTY, userId: "alice",
       type: "member_joined", payload: { partyId: PARTY, userId: "alice" },
     });
-    await appendEvent(db, {
-      id: "e2", partyId: PARTY, userId: "bob",
+    const e2 = await appendEvent(db, {
+      partyId: PARTY, userId: "bob",
       type: "member_joined", payload: { partyId: PARTY, userId: "bob" },
     });
 
     // Mark e2 as undone
-    const { events } = await import("../../db/schema");
-    const { eq } = await import("drizzle-orm");
-    await db.update(events).set({ undoneAt: new Date() }).where(eq(events.id, "e2"));
+    await db.update(events).set({ undoneAt: new Date() }).where(eq(events.id, e2));
 
     const state = await replayPartyState(db, PARTY);
     expect(state.members).toHaveLength(1);
