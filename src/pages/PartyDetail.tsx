@@ -8,17 +8,17 @@ import { CHARACTERS, SET_PRICE_YEN } from "../shared/characters";
 import type { ClaimType } from "../shared/types";
 
 interface MemberRow {
-  user_id: string;
-  display_name: string;
-  avatar_url: string | null;
-  joined_at: number;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  joinedAt: string;
 }
 
 interface ClaimRow {
-  character_id: number;
-  user_id: string;
-  display_name: string;
-  claim_type: ClaimType;
+  characterId: number;
+  userId: string;
+  displayName: string;
+  claimType: ClaimType;
   rank: number | null;
 }
 
@@ -26,11 +26,11 @@ interface PartyData {
   id: string;
   name: string;
   description: string | null;
-  leader_id: string;
+  leaderId: string;
   status: string;
-  group_chat_link: string | null;
+  groupChatLink: string | null;
   languages: string;
-  auto_promote_date: string | null;
+  autoPromoteDate: string | null;
   members: MemberRow[];
   claims: ClaimRow[];
 }
@@ -47,10 +47,10 @@ interface CharacterSlot {
 
 function resolveClientSlots(claims: ClaimRow[]): CharacterSlot[] {
   return CHARACTERS.map((char) => {
-    const charClaims = claims.filter((c) => c.character_id === char.id);
-    const claimed = charClaims.find((c) => c.claim_type === "claimed");
-    const conditionals = charClaims.filter((c) => c.claim_type === "conditional");
-    const preferences = charClaims.filter((c) => c.claim_type === "preference");
+    const charClaims = claims.filter((c) => c.characterId === char.id);
+    const claimed = charClaims.find((c) => c.claimType === "claimed");
+    const conditionals = charClaims.filter((c) => c.claimType === "conditional");
+    const preferences = charClaims.filter((c) => c.claimType === "preference");
 
     let state: SlotState = "open";
     if (claimed) state = "claimed";
@@ -61,15 +61,15 @@ function resolveClientSlots(claims: ClaimRow[]): CharacterSlot[] {
       characterId: char.id,
       state,
       claimedBy: claimed
-        ? { userId: claimed.user_id, displayName: claimed.display_name }
+        ? { userId: claimed.userId, displayName: claimed.displayName }
         : null,
       conditionals: conditionals.map((c) => ({
-        userId: c.user_id,
-        displayName: c.display_name,
+        userId: c.userId,
+        displayName: c.displayName,
       })),
       preferences: preferences.map((c) => ({
-        userId: c.user_id,
-        displayName: c.display_name,
+        userId: c.userId,
+        displayName: c.displayName,
         rank: c.rank,
       })),
     };
@@ -131,8 +131,8 @@ export function PartyDetail() {
     }
   })();
 
-  const isMember = user && party.members.some((m) => m.user_id === user.id);
-  const isLeader = user?.id === party.leader_id;
+  const isMember = user && party.members.some((m) => m.userId === user.id);
+  const isLeader = user?.id === party.leaderId;
   const isOpen = party.status === "open";
   const claimedCount = slots.filter((s) => s.state === "claimed").length;
   const memberCount = party.members.length;
@@ -140,7 +140,7 @@ export function PartyDetail() {
 
   // Check if current user already has a full claim
   const userHasClaimed = user
-    ? party.claims.some((c) => c.user_id === user.id && c.claim_type === "claimed")
+    ? party.claims.some((c) => c.userId === user.id && c.claimType === "claimed")
     : false;
 
   async function handleJoin() {
@@ -243,9 +243,9 @@ export function PartyDetail() {
       )}
 
       {/* Group chat link */}
-      {isMember && party.group_chat_link && (
+      {isMember && party.groupChatLink && (
         <a
-          href={party.group_chat_link}
+          href={party.groupChatLink}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 p-3 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-sm"
@@ -293,15 +293,15 @@ export function PartyDetail() {
         <div className="space-y-2">
           {party.members.map((m) => (
             <div
-              key={m.user_id}
+              key={m.userId}
               className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg"
             >
               <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-sm font-medium text-gray-600 dark:text-gray-400">
-                {m.display_name.charAt(0).toUpperCase()}
+                {m.displayName.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1">
-                <span className="font-medium text-sm">{m.display_name}</span>
-                {m.user_id === party.leader_id && (
+                <span className="font-medium text-sm">{m.displayName}</span>
+                {m.userId === party.leaderId && (
                   <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400">
                     {t("partyDetail.leader")}
                   </span>
@@ -310,12 +310,12 @@ export function PartyDetail() {
               {/* Show what this member has claimed */}
               {(() => {
                 const memberClaim = party.claims.find(
-                  (c) => c.user_id === m.user_id && c.claim_type === "claimed",
+                  (c) => c.userId === m.userId && c.claimType === "claimed",
                 );
                 if (memberClaim) {
                   return (
                     <span className="text-xs text-green-600 dark:text-green-400">
-                      {charName(memberClaim.character_id)}
+                      {charName(memberClaim.characterId)}
                     </span>
                   );
                 }

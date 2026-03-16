@@ -8,9 +8,9 @@ interface MyPartyRow {
   name: string;
   status: string;
   languages: string;
-  leader_id: string;
-  member_count: number;
-  claimed_count: number;
+  leaderId: string;
+  memberCount: number;
+  claimedCount: number;
 }
 
 export function MyParties() {
@@ -65,7 +65,7 @@ export function MyParties() {
             const languages: string[] = (() => {
               try { return JSON.parse(party.languages); } catch { return []; }
             })();
-            const isLeader = party.leader_id === user.id;
+            const isLeader = party.leaderId === user.id;
 
             return (
               <Link
@@ -102,8 +102,8 @@ export function MyParties() {
                     </div>
                   </div>
                   <div className="text-right text-sm text-gray-500">
-                    <div>{party.member_count} {t("partyDetail.members")}</div>
-                    <div>{party.claimed_count}/12 {t("partyDetail.claimed")}</div>
+                    <div>{party.memberCount} {t("partyDetail.members")}</div>
+                    <div>{party.claimedCount}/12 {t("partyDetail.claimed")}</div>
                   </div>
                 </div>
               </Link>
