@@ -2,13 +2,12 @@ name = "tokuten-matching"
 compatibility_date = "2026-03-15"
 pages_build_output_dir = "dist"
 
-# D1 binding — used by vitest for local test database.
-# Production binding is configured via Cloudflare Dashboard.
 [[d1_databases]]
 binding = "DB"
 database_name = "tokuten-db"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "2d6ce011-c50a-4a8b-a9e0-84d9bbb573e3"
 migrations_dir = "drizzle"
 
-# KV (SESSIONS) binding is configured via the Cloudflare Dashboard
-# (Pages > Settings > Functions > Bindings)
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "d0988aa4a0a14956996680cd4cb72708"
