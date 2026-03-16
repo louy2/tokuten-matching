@@ -15,12 +15,14 @@ export type UndoError =
 /**
  * Undo a recent event within the 30-second window.
  * Reverses the materialized state change and marks the event as undone.
+ * All writes are batched atomically.
  */
 export async function undoEvent(
   db: DrizzleD1Database,
   eventId: string,
   requestingUserId: string,
 ): Promise<"ok" | UndoError> {
+  // Read phase: validate and gather context
   const row = await db
     .select()
     .from(events)
@@ -37,14 +39,16 @@ export async function undoEvent(
   const type = row.type as EventType;
   const payload = JSON.parse(row.payload) as Record<string, unknown>;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const writes: any[] = [];
+
   switch (type) {
     case "claim_placed": {
       // Delete the claim from materialized table
       const claimId = payload.claimId as string;
-      await db.delete(characterClaims).where(eq(characterClaims.id, claimId));
+      writes.push(db.delete(characterClaims).where(eq(characterClaims.id, claimId)));
 
-      // Restore any displaced conditionals (find displacement events for same claim action)
-      // Displaced events have id pattern evt-displaced-{originalClaimId} and reference the placing user
+      // Restore any displaced conditionals
       const displacedEvents = await db
         .select()
         .from(events)
@@ -59,37 +63,56 @@ export async function undoEvent(
         const dp = JSON.parse(de.payload) as Record<string, unknown>;
         if (dp.byUserId === requestingUserId && dp.characterId === payload.characterId) {
           // Restore the displaced conditional claim
-          await db.insert(characterClaims).values({
-            id: dp.displacedClaimId as string,
-            partyId: row.partyId!,
-            characterId: dp.characterId as number,
-            userId: dp.displacedUserId as string,
-            claimType: "conditional",
-            rank: null,
-            createdAt: new Date(),
-          });
+          writes.push(
+            db.insert(characterClaims).values({
+              id: dp.displacedClaimId as string,
+              partyId: row.partyId!,
+              characterId: dp.characterId as number,
+              userId: dp.displacedUserId as string,
+              claimType: "conditional",
+              rank: null,
+              createdAt: new Date(),
+            }),
+          );
           // Mark the displacement event as undone too
-          await db
-            .update(events)
-            .set({ undoneAt: new Date() })
-            .where(eq(events.id, de.id));
+          writes.push(
+            db.update(events).set({ undoneAt: new Date() }).where(eq(events.id, de.id)),
+          );
         }
       }
       break;
     }
 
     case "member_joined": {
-      // Remove membership
       const partyId = payload.partyId as string;
       const userId = payload.userId as string;
-      await db
-        .delete(partyMembers)
-        .where(
+      writes.push(
+        db.delete(partyMembers).where(
           and(
             eq(partyMembers.partyId, partyId),
             eq(partyMembers.userId, userId),
           ),
-        );
+        ),
+      );
+      break;
+    }
+
+    case "claim_cancelled": {
+      // Restore the cancelled claim
+      const claimId = payload.claimId as string;
+      const characterId = payload.characterId as number;
+      const claimType = payload.claimType as string;
+      writes.push(
+        db.insert(characterClaims).values({
+          id: claimId,
+          partyId: row.partyId!,
+          characterId,
+          userId: requestingUserId,
+          claimType,
+          rank: null,
+          createdAt: new Date(),
+        }),
+      );
       break;
     }
 
@@ -103,11 +126,13 @@ export async function undoEvent(
       return "not_undoable";
   }
 
-  // Mark the event as undone
-  await db
-    .update(events)
-    .set({ undoneAt: new Date() })
-    .where(eq(events.id, eventId));
+  // Mark the event itself as undone
+  writes.push(
+    db.update(events).set({ undoneAt: new Date() }).where(eq(events.id, eventId)),
+  );
+
+  // Atomic write: all materialized changes + event marking
+  await db.batch(writes as [typeof writes[0], ...typeof writes]);
 
   return "ok";
 }
