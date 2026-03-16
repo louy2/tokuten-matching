@@ -201,6 +201,30 @@ describe("Claim State Machine", () => {
       expect(err).toBeNull();
     });
 
+    it("user cannot add duplicate preference for the same character", async () => {
+      await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "preference", rank: 1 });
+      const err = await validateClaim(db, PARTY, {
+        userId: "alice", characterId: 1, claimType: "preference",
+      });
+      expect(err).toBe("user_already_prefers_this_character");
+    });
+
+    it("user can prefer different characters", async () => {
+      await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "preference", rank: 1 });
+      const err = await validateClaim(db, PARTY, {
+        userId: "alice", characterId: 2, claimType: "preference",
+      });
+      expect(err).toBeNull();
+    });
+
+    it("different users can prefer the same character", async () => {
+      await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "preference", rank: 1 });
+      const err = await validateClaim(db, PARTY, {
+        userId: "bob", characterId: 1, claimType: "preference",
+      });
+      expect(err).toBeNull();
+    });
+
     it("user can have both a claimed and preferences", async () => {
       await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
       const err = await validateClaim(db, PARTY, {

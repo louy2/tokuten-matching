@@ -2,7 +2,118 @@ import { eq, and, ne, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { parties, partyMembers } from "../db/schema";
 import { SET_PRICE_YEN } from "../shared/characters";
-import { appendEvent } from "./events";
+import { buildEventInsert } from "./events";
+
+// ─── Create ───────────────────────────────────────────────
+
+export interface CreatePartyInput {
+  name: string;
+  description?: string | null;
+  leaderId: string;
+  languages: string[];
+  groupChatLink?: string | null;
+  autoPromoteDate?: string;
+}
+
+export interface CreatePartyResult {
+  partyId: string;
+  eventIds: string[];
+}
+
+/**
+ * Create a party and add the leader as first member.
+ * Party insert + member insert + events are batched atomically.
+ */
+export async function createParty(
+  db: DrizzleD1Database,
+  input: CreatePartyInput,
+): Promise<CreatePartyResult> {
+  const partyId = crypto.randomUUID();
+  const now = new Date();
+
+  const ev1 = buildEventInsert(db, {
+    partyId,
+    userId: input.leaderId,
+    type: "party_created",
+    payload: {
+      partyId,
+      name: input.name,
+      description: input.description ?? null,
+      leaderId: input.leaderId,
+      languages: input.languages,
+      groupChatLink: input.groupChatLink ?? null,
+      autoPromoteDate: input.autoPromoteDate ?? "2026-05-08",
+    },
+  });
+
+  const ev2 = buildEventInsert(db, {
+    partyId,
+    userId: input.leaderId,
+    type: "member_joined",
+    payload: { partyId, userId: input.leaderId },
+  });
+
+  await db.batch([
+    db.insert(parties).values({
+      id: partyId,
+      name: input.name,
+      description: input.description ?? null,
+      leaderId: input.leaderId,
+      status: "open",
+      groupChatLink: input.groupChatLink ?? null,
+      languages: JSON.stringify(input.languages),
+      autoPromoteDate: input.autoPromoteDate ?? "2026-05-08",
+      createdAt: now,
+    }),
+    ev1.query,
+    db.insert(partyMembers).values({
+      partyId,
+      userId: input.leaderId,
+      joinedAt: now,
+    }),
+    ev2.query,
+  ]);
+
+  return { partyId, eventIds: [ev1.id, ev2.id] };
+}
+
+// ─── Lock ─────────────────────────────────────────────────
+
+export type LockError = "party_not_found" | "already_locked" | "not_leader";
+
+/**
+ * Lock a party (prevent new joins and claims).
+ * Status update + event are batched atomically.
+ */
+export async function lockParty(
+  db: DrizzleD1Database,
+  partyId: string,
+  userId: string,
+): Promise<{ eventId: string } | { error: LockError }> {
+  const party = await db
+    .select({ status: parties.status, leaderId: parties.leaderId })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+
+  if (!party) return { error: "party_not_found" };
+  if (party.status === "locked") return { error: "already_locked" };
+  if (party.leaderId !== userId) return { error: "not_leader" };
+
+  const ev = buildEventInsert(db, {
+    partyId,
+    userId,
+    type: "party_locked",
+    payload: { partyId },
+  });
+
+  await db.batch([
+    db.update(parties).set({ status: "locked" }).where(eq(parties.id, partyId)),
+    ev.query,
+  ]);
+
+  return { eventId: ev.id };
+}
 
 // ─── Browse / Filter ───────────────────────────────────────
 
@@ -75,6 +186,7 @@ export async function joinParty(
   partyId: string,
   userId: string,
 ): Promise<JoinResult> {
+  // Read phase: validate
   const party = await db
     .select({ status: parties.status })
     .from(parties)
@@ -93,20 +205,24 @@ export async function joinParty(
     .get();
   if (existing) return { error: "already_a_member" };
 
-  await db.insert(partyMembers).values({
-    partyId,
-    userId,
-    joinedAt: new Date(),
-  });
-
-  const eventId = await appendEvent(db, {
+  // Write phase: member insert + event batched atomically
+  const ev = buildEventInsert(db, {
     partyId,
     userId,
     type: "member_joined",
     payload: { partyId, userId },
   });
 
-  return { error: null, eventId };
+  await db.batch([
+    db.insert(partyMembers).values({
+      partyId,
+      userId,
+      joinedAt: new Date(),
+    }),
+    ev.query,
+  ]);
+
+  return { error: null, eventId: ev.id };
 }
 
 // ─── Multi-party transparency ──────────────────────────────

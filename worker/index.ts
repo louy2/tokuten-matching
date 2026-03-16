@@ -10,7 +10,9 @@ import {
   partyMembers,
   characterClaims,
 } from "../src/db/schema";
-import { cancelClaim } from "../src/engine/claims";
+import { validateClaim, placeClaim, cancelClaim } from "../src/engine/claims";
+import { createParty, joinParty } from "../src/engine/parties";
+import { upsertUser } from "../src/engine/users";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -105,36 +107,17 @@ app.get("/api/auth/callback", async (c) => {
 
   const db = getDb(c.env.DB);
 
-  // Find or create user
-  const existing = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.oauthProvider, "discord"), eq(users.oauthId, discord.id)))
-    .get();
-
   const displayName = discord.global_name ?? discord.username;
   const avatarUrl = discord.avatar
     ? `https://cdn.discordapp.com/avatars/${discord.id}/${discord.avatar}.png`
     : null;
 
-  let userId: string;
-  if (existing) {
-    userId = existing.id;
-    await db
-      .update(users)
-      .set({ displayName, avatarUrl })
-      .where(eq(users.id, userId));
-  } else {
-    userId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: userId,
-      displayName,
-      avatarUrl,
-      oauthProvider: "discord",
-      oauthId: discord.id,
-      createdAt: new Date(),
-    });
-  }
+  const { userId } = await upsertUser(db, {
+    displayName,
+    avatarUrl,
+    oauthProvider: "discord",
+    oauthId: discord.id,
+  });
 
   // Create session
   const sessionId = crypto.randomUUID();
@@ -265,28 +248,15 @@ app.post("/api/parties/create", async (c) => {
   }
 
   const db = getDb(c.env.DB);
-  const partyId = crypto.randomUUID();
-  const now = new Date();
-
-  await db.insert(parties).values({
-    id: partyId,
+  const result = await createParty(db, {
     name: body.name.trim(),
     description: body.description?.trim() || null,
     leaderId: user.id,
-    status: "open",
+    languages: body.languages,
     groupChatLink: body.groupChatLink?.trim() || null,
-    languages: JSON.stringify(body.languages),
-    autoPromoteDate: "2026-05-08",
-    createdAt: now,
   });
 
-  await db.insert(partyMembers).values({
-    partyId,
-    userId: user.id,
-    joinedAt: now,
-  });
-
-  return c.json({ ok: true, partyId });
+  return c.json({ ok: true, partyId: result.partyId });
 });
 
 app.post("/api/parties/:partyId/join", async (c) => {
@@ -296,28 +266,16 @@ app.post("/api/parties/:partyId/join", async (c) => {
   const partyId = c.req.param("partyId");
   const db = getDb(c.env.DB);
 
-  const party = await db
-    .select({ status: parties.status })
-    .from(parties)
-    .where(eq(parties.id, partyId))
-    .get();
+  const result = await joinParty(db, partyId, user.id);
 
-  if (!party) return c.json({ error: "Party not found" }, 404);
-  if (party.status === "locked") return c.json({ error: "party_locked" }, 409);
-
-  const existing = await db
-    .select({ partyId: partyMembers.partyId })
-    .from(partyMembers)
-    .where(and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, user.id)))
-    .get();
-
-  if (existing) return c.json({ error: "already_a_member" }, 409);
-
-  await db.insert(partyMembers).values({
-    partyId,
-    userId: user.id,
-    joinedAt: new Date(),
-  });
+  if (result.error) {
+    const statusMap: Record<string, number> = {
+      party_not_found: 404,
+      party_locked: 409,
+      already_a_member: 409,
+    };
+    return c.json({ error: result.error }, statusMap[result.error] as 404 ?? 400);
+  }
 
   return c.json({ ok: true });
 });
@@ -337,92 +295,28 @@ app.post("/api/parties/:partyId/claims", async (c) => {
 
   const { characterId, claimType, rank } = body;
 
-  if (!Number.isInteger(characterId) || characterId < 1 || characterId > 12) {
-    return c.json({ error: "invalid_character" }, 400);
-  }
-
-  const party = await db
-    .select({ status: parties.status })
-    .from(parties)
-    .where(eq(parties.id, partyId))
-    .get();
-
-  if (!party) return c.json({ error: "Party not found" }, 404);
-  if (party.status === "locked") return c.json({ error: "party_locked" }, 409);
-
-  const member = await db
-    .select({ partyId: partyMembers.partyId })
-    .from(partyMembers)
-    .where(and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, user.id)))
-    .get();
-
-  if (!member) return c.json({ error: "not_a_member" }, 403);
-
-  if (claimType === "claimed") {
-    const existingUserClaim = await db
-      .select({ id: characterClaims.id })
-      .from(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.userId, user.id),
-          eq(characterClaims.claimType, "claimed"),
-        ),
-      )
-      .get();
-    if (existingUserClaim) return c.json({ error: "user_already_claimed_another" }, 409);
-
-    const existingCharClaim = await db
-      .select({ id: characterClaims.id })
-      .from(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.characterId, characterId),
-          eq(characterClaims.claimType, "claimed"),
-        ),
-      )
-      .get();
-    if (existingCharClaim) return c.json({ error: "character_already_claimed" }, 409);
-
-    await db
-      .delete(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.characterId, characterId),
-          eq(characterClaims.claimType, "conditional"),
-        ),
-      );
-  }
-
-  if (claimType === "conditional") {
-    const existingCond = await db
-      .select({ id: characterClaims.id })
-      .from(characterClaims)
-      .where(
-        and(
-          eq(characterClaims.partyId, partyId),
-          eq(characterClaims.characterId, characterId),
-          eq(characterClaims.claimType, "conditional"),
-        ),
-      )
-      .get();
-    if (existingCond) return c.json({ error: "character_already_has_conditional" }, 409);
-  }
-
-  const claimId = crypto.randomUUID();
-  await db.insert(characterClaims).values({
-    id: claimId,
-    partyId,
-    characterId,
+  const error = await validateClaim(db, partyId, {
     userId: user.id,
+    characterId,
     claimType,
-    rank: rank ?? null,
-    createdAt: new Date(),
   });
 
-  return c.json({ ok: true, claimId });
+  if (error) {
+    const status = error === "not_a_member" ? 403
+      : error === "invalid_character" ? 400
+      : 409;
+    return c.json({ error }, status);
+  }
+
+  const result = await placeClaim(db, partyId, {
+    id: crypto.randomUUID(),
+    userId: user.id,
+    characterId,
+    claimType,
+    rank: rank ?? null,
+  });
+
+  return c.json({ ok: true, claimId: result.claimId });
 });
 
 app.delete("/api/parties/:partyId/claims", async (c) => {

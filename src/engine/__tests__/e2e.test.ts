@@ -283,6 +283,89 @@ describe("E2E: User joins, claims, then quickly undoes everything", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+//  Duplicate preference prevention (event-sourced)
+// ═══════════════════════════════════════════════════════════
+
+describe("E2E: Duplicate preference prevention", () => {
+  let db: DrizzleD1Database;
+  const PARTY = "dup-pref-party";
+
+  beforeEach(async () => {
+    db = await setupDb();
+    await insertUser(db, "leader");
+    await insertUser(db, "alice");
+    await insertUser(db, "bob");
+    await insertParty(db, { id: PARTY, leaderId: "leader" });
+    await insertMember(db, PARTY, "leader");
+    await insertMember(db, PARTY, "alice");
+    await insertMember(db, PARTY, "bob");
+  });
+
+  it("rejects duplicate preference and replay matches materialized state", async () => {
+    // Alice preferences character 1
+    await placeClaim(db, PARTY, {
+      id: nextId(), userId: "alice", characterId: 1, claimType: "preference", rank: 1,
+    });
+
+    // Alice tries to preference character 1 again → rejected
+    const err = await validateClaim(db, PARTY, {
+      userId: "alice", characterId: 1, claimType: "preference",
+    });
+    expect(err).toBe("user_already_prefers_this_character");
+
+    // Bob can still preference character 1
+    const errBob = await validateClaim(db, PARTY, {
+      userId: "bob", characterId: 1, claimType: "preference",
+    });
+    expect(errBob).toBeNull();
+    await placeClaim(db, PARTY, {
+      id: nextId(), userId: "bob", characterId: 1, claimType: "preference", rank: 2,
+    });
+
+    // Materialized state shows exactly 2 preferences
+    const slots = await resolveSlots(db, PARTY);
+    expect(slots[0].preferences).toHaveLength(2);
+
+    // Replay from events matches materialized state
+    const replayed = await replayPartyState(db, PARTY);
+    const replayedPrefs = replayed.claims.filter(
+      (c) => c.characterId === 1 && c.claimType === "preference",
+    );
+    expect(replayedPrefs).toHaveLength(2);
+    expect(replayedPrefs.map((p) => p.userId).sort()).toEqual(["alice", "bob"]);
+  });
+
+  it("undo preference then re-add is allowed", async () => {
+    const result = await placeClaim(db, PARTY, {
+      id: nextId(), userId: "alice", characterId: 1, claimType: "preference", rank: 1,
+    });
+
+    // Cannot add again
+    let err = await validateClaim(db, PARTY, {
+      userId: "alice", characterId: 1, claimType: "preference",
+    });
+    expect(err).toBe("user_already_prefers_this_character");
+
+    // Undo the preference
+    const undoResult = await undoEvent(db, result.eventIds[0], "alice");
+    expect(undoResult).toBe("ok");
+
+    // Now can re-add
+    err = await validateClaim(db, PARTY, {
+      userId: "alice", characterId: 1, claimType: "preference",
+    });
+    expect(err).toBeNull();
+
+    // Replay reflects undo — no preferences remain
+    const replayed = await replayPartyState(db, PARTY);
+    const replayedPrefs = replayed.claims.filter(
+      (c) => c.characterId === 1 && c.claimType === "preference",
+    );
+    expect(replayedPrefs).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
 //  HAPPY PATH: Time travel replay at different points
 // ═══════════════════════════════════════════════════════════
 
