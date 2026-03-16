@@ -15,6 +15,13 @@
       "when": 1773897600000,
       "tag": "0001_backfill_events",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1773679810762,
+      "tag": "0002_eminent_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

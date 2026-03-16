@@ -81,6 +81,10 @@
     "loginRequired": "ログインしてプロフィールを表示してください。",
     "userId": "ユーザーID",
     "avatar": "アバター",
+    "characterPreferences": "推しキャラ設定",
+    "characterPreferencesHint": "好きなキャラクターを順番に選んでください。パーティーに参加すると自動的に表示されます。",
+    "addCharacter": "キャラクターを追加",
+    "noPreferencesYet": "まだ推しキャラが設定されていません。上から選んでください。",
     "logout": "ログアウト"
   },
   "slotState": {

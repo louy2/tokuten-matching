@@ -8,6 +8,7 @@ export const users = sqliteTable("users", {
   oauthId: text("oauth_id").notNull(),
   languages: text("languages").notNull().default("[]"), // JSON array: ["ja","en","zh"]
   paymentMethods: text("payment_methods").notNull().default("[]"), // JSON array
+  characterPreferences: text("character_preferences").notNull().default("[]"), // JSON array of character IDs in preference order, e.g. [3,7,1]
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `character_preferences` text DEFAULT '[]' NOT NULL;

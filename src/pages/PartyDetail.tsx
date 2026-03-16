@@ -12,6 +12,7 @@ interface MemberRow {
   displayName: string;
   avatarUrl: string | null;
   joinedAt: string;
+  characterPreferences: number[];
 }
 
 interface ClaimRow {
@@ -45,12 +46,26 @@ interface CharacterSlot {
   preferences: { userId: string; displayName: string; rank: number | null }[];
 }
 
-function resolveClientSlots(claims: ClaimRow[]): CharacterSlot[] {
+function resolveClientSlots(claims: ClaimRow[], members: MemberRow[]): CharacterSlot[] {
   return CHARACTERS.map((char) => {
     const charClaims = claims.filter((c) => c.characterId === char.id);
     const claimed = charClaims.find((c) => c.claimType === "claimed");
     const conditionals = charClaims.filter((c) => c.claimType === "conditional");
-    const preferences = charClaims.filter((c) => c.claimType === "preference");
+
+    // Derive preferences from member profiles
+    const preferences: { userId: string; displayName: string; rank: number | null }[] = [];
+    for (const member of members) {
+      const prefs = member.characterPreferences ?? [];
+      const rankIndex = prefs.indexOf(char.id);
+      if (rankIndex !== -1) {
+        preferences.push({
+          userId: member.userId,
+          displayName: member.displayName,
+          rank: rankIndex + 1,
+        });
+      }
+    }
+    preferences.sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
 
     let state: SlotState = "open";
     if (claimed) state = "claimed";
@@ -67,11 +82,7 @@ function resolveClientSlots(claims: ClaimRow[]): CharacterSlot[] {
         userId: c.userId,
         displayName: c.displayName,
       })),
-      preferences: preferences.map((c) => ({
-        userId: c.userId,
-        displayName: c.displayName,
-        rank: c.rank,
-      })),
+      preferences,
     };
   });
 }
@@ -122,7 +133,7 @@ export function PartyDetail() {
   }
 
   const party = data;
-  const slots = resolveClientSlots(party.claims);
+  const slots = resolveClientSlots(party.claims, party.members);
   const languages: string[] = (() => {
     try {
       return JSON.parse(party.languages);
@@ -393,7 +404,6 @@ function CharacterCard({
   const canConditional =
     isMember && isOpen && slot.state === "open" &&
     !slot.conditionals.some((c) => c.userId === userId);
-  const canPreference = isMember && isOpen;
   const userHasConditionalHere = isMember && isOpen && slot.conditionals.some((c) => c.userId === userId);
   const userHasClaimedHere = isMember && isOpen && slot.claimedBy?.userId === userId;
 
@@ -485,18 +495,6 @@ function CharacterCard({
           {/* Action buttons */}
           {isMember && isOpen && (
             <div className="flex flex-wrap gap-2 pt-2">
-              {canPreference && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClaim(slot.characterId, "preference", 1);
-                  }}
-                  disabled={actionLoading}
-                  className="text-xs px-2.5 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
-                >
-                  {t("partyDetail.addPreference")}
-                </button>
-              )}
               {canConditional && (
                 <button
                   onClick={(e) => {
