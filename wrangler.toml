@@ -13,5 +13,8 @@ migrations_dir = "drizzle"
 binding = "SESSIONS"
 id = "d0988aa4a0a14956996680cd4cb72708"
 
+[observability]
+enabled = true
+
 [triggers]
 crons = ["0 0 * * *"]
