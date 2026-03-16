@@ -11,6 +11,7 @@ import {
   characterClaims,
 } from "../src/db/schema";
 import { validateClaim, placeClaim, cancelClaim } from "../src/engine/claims";
+import { buildEventInsert } from "../src/engine/events";
 import { createParty, joinParty } from "../src/engine/parties";
 import { upsertUser } from "../src/engine/users";
 
@@ -33,6 +34,7 @@ app.get("/api/auth/me", async (c) => {
       id: users.id,
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
+      characterPreferences: users.characterPreferences,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -40,7 +42,12 @@ app.get("/api/auth/me", async (c) => {
 
   if (!user) return c.json({ user: null });
 
-  return c.json({ user });
+  return c.json({
+    user: {
+      ...user,
+      characterPreferences: JSON.parse(user.characterPreferences ?? "[]"),
+    },
+  });
 });
 
 app.get("/api/auth/login", async (c) => {
@@ -157,6 +164,51 @@ app.get("/api/auth/logout", async (c) => {
   });
 });
 
+// ─── Profile routes ─────────────────────────────────────────
+
+app.put("/api/profile", async (c) => {
+  const user = await getSessionUser(c.req.raw, c.env);
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  const body = await c.req.json<{
+    characterPreferences?: number[];
+  }>();
+
+  const db = getDb(c.env.DB);
+
+  if (body.characterPreferences !== undefined) {
+    const prefs = body.characterPreferences;
+    // Validate: must be array of unique character IDs 1-12
+    if (
+      !Array.isArray(prefs) ||
+      prefs.some((id) => !Number.isInteger(id) || id < 1 || id > 12) ||
+      new Set(prefs).size !== prefs.length
+    ) {
+      return c.json({ error: "Invalid character preferences" }, 400);
+    }
+
+    const ev = buildEventInsert(db, {
+      partyId: null,
+      userId: user.id,
+      type: "user_profile_updated",
+      payload: {
+        userId: user.id,
+        characterPreferences: prefs,
+      },
+    });
+
+    await db.batch([
+      db
+        .update(users)
+        .set({ characterPreferences: JSON.stringify(prefs) })
+        .where(eq(users.id, user.id)),
+      ev.query,
+    ]);
+  }
+
+  return c.json({ ok: true });
+});
+
 // ─── Party routes ───────────────────────────────────────────
 
 app.get("/api/parties", async (c) => {
@@ -203,6 +255,7 @@ app.get("/api/parties/:partyId", async (c) => {
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
         joinedAt: partyMembers.joinedAt,
+        characterPreferences: users.characterPreferences,
       })
       .from(partyMembers)
       .innerJoin(users, eq(users.id, partyMembers.userId))
@@ -224,7 +277,10 @@ app.get("/api/parties/:partyId", async (c) => {
 
   return c.json({
     ...party,
-    members,
+    members: members.map((m) => ({
+      ...m,
+      characterPreferences: JSON.parse(m.characterPreferences ?? "[]"),
+    })),
     claims,
   });
 });
