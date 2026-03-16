@@ -1,1 +1,1 @@
-{"root":["./api/auth/me.ts","./api/parties/[partyId].ts","./api/parties/index.ts"],"version":"5.9.3"}
+{"root":["./api/_auth.ts","./api/my-parties.ts","./api/auth/me.ts","./api/parties/create.ts","./api/parties/index.ts","./api/parties/[partyId]/claims.ts","./api/parties/[partyId]/index.ts","./api/parties/[partyId]/join.ts"],"version":"5.9.3"}
