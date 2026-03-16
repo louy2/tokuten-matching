@@ -5,9 +5,9 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "tokuten-db"
-database_id = "placeholder-replace-after-d1-create"
+database_id = "2d6ce011-c50a-4a8b-a9e0-84d9bbb573e3"
 migrations_dir = "drizzle"
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "placeholder-replace-after-kv-create"
+id = "d0988aa4a0a14956996680cd4cb72708"
