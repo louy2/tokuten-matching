@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useFetch, postApi } from "../hooks/useApi";
 import { useAuth } from "../hooks/useAuth";
 import { useCharacterName } from "../hooks/useCharacterName";
-import { CHARACTERS, SET_PRICE_YEN } from "../shared/characters";
+import { CHARACTERS, SET_PRICE_YEN, type Character } from "../shared/characters";
 import type { ClaimType } from "../shared/types";
 
 interface MemberRow {
@@ -272,6 +272,7 @@ export function PartyDetail() {
             <CharacterCard
               key={slot.characterId}
               slot={slot}
+              character={CHARACTERS.find((c) => c.id === slot.characterId)!}
               charName={charName(slot.characterId)}
               isMember={!!isMember}
               isOpen={isOpen}
@@ -343,6 +344,7 @@ export function PartyDetail() {
 
 interface CharacterCardProps {
   slot: CharacterSlot;
+  character: Character;
   charName: string;
   isMember: boolean;
   isOpen: boolean;
@@ -355,6 +357,7 @@ interface CharacterCardProps {
 
 function CharacterCard({
   slot,
+  character,
   charName,
   isMember,
   isOpen,
@@ -373,12 +376,21 @@ function CharacterCard({
   const canPreference = isMember && isOpen;
 
   return (
-    <div className={`border rounded-lg p-3 ${STATE_COLORS[slot.state]}`}>
+    <div
+      className={`border rounded-lg p-3 border-l-4 ${STATE_COLORS[slot.state]}`}
+      style={{ borderLeftColor: character.color }}
+    >
       <div
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-2">
+          <span
+            className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+            style={{ backgroundColor: character.color }}
+          >
+            {character.id}
+          </span>
           <span className="font-medium">{charName}</span>
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATE_BADGE_COLORS[slot.state]}`}>
             {t(`slotState.${slot.state}`)}
