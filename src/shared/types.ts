@@ -33,6 +33,7 @@ export interface PartyDetail {
   groupChatLink: string | null;
   languages: Language[];
   autoPromoteDate: string | null;
+  mituoriBoardClaimedBy: string | null;
   members: PartyMember[];
   claims: CharacterClaimView[];
 }

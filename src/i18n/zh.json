@@ -58,7 +58,12 @@
     "leader": "队长",
     "leaderPanel": "队长面板",
     "leaderInfo": "作为队长，你可以管理成员，并在所有人准备好后锁定队伍。",
-    "memberList": "成员"
+    "memberList": "成员",
+    "mituoriBoard": "三折板",
+    "mituoriBoardUnclaimed": "还没有人认领展板",
+    "mituoriBoardClaimed": "已认领",
+    "claimBoard": "认领展板",
+    "unclaimBoard": "取消认领展板"
   },
   "createParty": {
     "title": "创建队伍",

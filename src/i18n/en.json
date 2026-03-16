@@ -58,7 +58,12 @@
     "leader": "Leader",
     "leaderPanel": "Leader Panel",
     "leaderInfo": "As the party leader, you can manage members and lock the party when everyone is ready.",
-    "memberList": "Members"
+    "memberList": "Members",
+    "mituoriBoard": "Tri-fold Board",
+    "mituoriBoardUnclaimed": "No one has claimed the board yet",
+    "mituoriBoardClaimed": "Claimed",
+    "claimBoard": "Claim board",
+    "unclaimBoard": "Unclaim board"
   },
   "createParty": {
     "title": "Create a Party",

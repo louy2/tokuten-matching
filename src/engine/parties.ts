@@ -277,6 +277,110 @@ export function isAutoPromoteDue(
   return now >= target;
 }
 
+// ─── Mituori board claim ──────────────────────────────────
+
+export type MituoriBoardClaimError =
+  | "party_not_found"
+  | "not_a_member"
+  | "party_locked"
+  | "already_claimed";
+
+export async function claimMituoriBoard(
+  db: DrizzleD1Database,
+  partyId: string,
+  userId: string,
+): Promise<{ eventId: string } | { error: MituoriBoardClaimError }> {
+  const party = await db
+    .select({
+      status: parties.status,
+      mituoriBoardClaimedBy: parties.mituoriBoardClaimedBy,
+    })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+
+  if (!party) return { error: "party_not_found" };
+  if (party.status === "locked") return { error: "party_locked" };
+  if (party.mituoriBoardClaimedBy) return { error: "already_claimed" };
+
+  const membership = await db
+    .select()
+    .from(partyMembers)
+    .where(
+      and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, userId)),
+    )
+    .get();
+  if (!membership) return { error: "not_a_member" };
+
+  const ev = buildEventInsert(db, {
+    partyId,
+    userId,
+    type: "mituori_board_claimed",
+    payload: { partyId, userId },
+  });
+
+  await db.batch([
+    db
+      .update(parties)
+      .set({ mituoriBoardClaimedBy: userId })
+      .where(eq(parties.id, partyId)),
+    ev.query,
+  ]);
+
+  return { eventId: ev.id };
+}
+
+export type MituoriBoardUnclaimError =
+  | "party_not_found"
+  | "not_a_member"
+  | "party_locked"
+  | "not_board_claimer";
+
+export async function unclaimMituoriBoard(
+  db: DrizzleD1Database,
+  partyId: string,
+  userId: string,
+): Promise<{ eventId: string } | { error: MituoriBoardUnclaimError }> {
+  const party = await db
+    .select({
+      status: parties.status,
+      mituoriBoardClaimedBy: parties.mituoriBoardClaimedBy,
+    })
+    .from(parties)
+    .where(eq(parties.id, partyId))
+    .get();
+
+  if (!party) return { error: "party_not_found" };
+  if (party.status === "locked") return { error: "party_locked" };
+  if (party.mituoriBoardClaimedBy !== userId) return { error: "not_board_claimer" };
+
+  const membership = await db
+    .select()
+    .from(partyMembers)
+    .where(
+      and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, userId)),
+    )
+    .get();
+  if (!membership) return { error: "not_a_member" };
+
+  const ev = buildEventInsert(db, {
+    partyId,
+    userId,
+    type: "mituori_board_unclaimed",
+    payload: { partyId, userId },
+  });
+
+  await db.batch([
+    db
+      .update(parties)
+      .set({ mituoriBoardClaimedBy: null })
+      .where(eq(parties.id, partyId)),
+    ev.query,
+  ]);
+
+  return { eventId: ev.id };
+}
+
 // ─── Party detail helpers ──────────────────────────────────
 
 export async function getPartyWithGroupChatLink(
