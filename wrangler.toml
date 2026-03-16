@@ -2,12 +2,6 @@ name = "tokuten-matching"
 compatibility_date = "2026-03-15"
 pages_build_output_dir = "dist"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "tokuten-db"
-database_id = "placeholder-replace-after-d1-create"
-migrations_dir = "drizzle"
-
-[[kv_namespaces]]
-binding = "SESSIONS"
-id = "placeholder-replace-after-kv-create"
+# D1 and KV bindings are configured via the Cloudflare Dashboard
+# (Pages > Settings > Functions > Bindings)
+# to avoid committing resource IDs to the repository.
