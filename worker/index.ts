@@ -11,6 +11,7 @@ import {
   characterClaims,
 } from "../src/db/schema";
 import { validateClaim, placeClaim, cancelClaim } from "../src/engine/claims";
+import { createParty, joinParty } from "../src/engine/parties";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -265,28 +266,15 @@ app.post("/api/parties/create", async (c) => {
   }
 
   const db = getDb(c.env.DB);
-  const partyId = crypto.randomUUID();
-  const now = new Date();
-
-  await db.insert(parties).values({
-    id: partyId,
+  const result = await createParty(db, {
     name: body.name.trim(),
     description: body.description?.trim() || null,
     leaderId: user.id,
-    status: "open",
+    languages: body.languages,
     groupChatLink: body.groupChatLink?.trim() || null,
-    languages: JSON.stringify(body.languages),
-    autoPromoteDate: "2026-05-08",
-    createdAt: now,
   });
 
-  await db.insert(partyMembers).values({
-    partyId,
-    userId: user.id,
-    joinedAt: now,
-  });
-
-  return c.json({ ok: true, partyId });
+  return c.json({ ok: true, partyId: result.partyId });
 });
 
 app.post("/api/parties/:partyId/join", async (c) => {
@@ -296,28 +284,16 @@ app.post("/api/parties/:partyId/join", async (c) => {
   const partyId = c.req.param("partyId");
   const db = getDb(c.env.DB);
 
-  const party = await db
-    .select({ status: parties.status })
-    .from(parties)
-    .where(eq(parties.id, partyId))
-    .get();
+  const result = await joinParty(db, partyId, user.id);
 
-  if (!party) return c.json({ error: "Party not found" }, 404);
-  if (party.status === "locked") return c.json({ error: "party_locked" }, 409);
-
-  const existing = await db
-    .select({ partyId: partyMembers.partyId })
-    .from(partyMembers)
-    .where(and(eq(partyMembers.partyId, partyId), eq(partyMembers.userId, user.id)))
-    .get();
-
-  if (existing) return c.json({ error: "already_a_member" }, 409);
-
-  await db.insert(partyMembers).values({
-    partyId,
-    userId: user.id,
-    joinedAt: new Date(),
-  });
+  if (result.error) {
+    const statusMap: Record<string, number> = {
+      party_not_found: 404,
+      party_locked: 409,
+      already_a_member: 409,
+    };
+    return c.json({ error: result.error }, statusMap[result.error] as 404 ?? 400);
+  }
 
   return c.json({ ok: true });
 });

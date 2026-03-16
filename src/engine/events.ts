@@ -26,14 +26,20 @@ export interface EventRow {
 
 // ─── Write ────────────────────────────────────────────────
 
+export interface EventInput {
+  partyId: string | null;
+  userId: string;
+  type: EventType;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Append an event (standalone, non-batched). Use for operations
+ * that only need a single write.
+ */
 export async function appendEvent(
   db: DrizzleD1Database,
-  event: {
-    partyId: string | null;
-    userId: string;
-    type: EventType;
-    payload: Record<string, unknown>;
-  },
+  event: EventInput,
 ): Promise<string> {
   const id = uuidv7();
   await db.insert(events).values({
@@ -45,6 +51,26 @@ export async function appendEvent(
     createdAt: new Date(),
   });
   return id;
+}
+
+/**
+ * Build an event insert query for use in db.batch().
+ * Returns the query builder and the generated event ID.
+ */
+export function buildEventInsert(
+  db: DrizzleD1Database,
+  event: EventInput,
+): { query: ReturnType<typeof db.insert>; id: string } {
+  const id = uuidv7();
+  const query = db.insert(events).values({
+    id,
+    partyId: event.partyId,
+    userId: event.userId,
+    type: event.type,
+    payload: JSON.stringify(event.payload),
+    createdAt: new Date(),
+  });
+  return { query, id };
 }
 
 // ─── Read ─────────────────────────────────────────────────

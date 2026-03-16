@@ -1,8 +1,9 @@
 import { eq, and } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
-import { characterClaims, parties, partyMembers } from "../db/schema";
+import { characterClaims, events, parties, partyMembers } from "../db/schema";
 import type { ClaimType } from "../shared/types";
-import { appendEvent } from "./events";
+import { appendEvent, buildEventInsert } from "./events";
+import { uuidv7 } from "../shared/uuidv7";
 
 /**
  * The resolved state of a single character slot within a party.
@@ -173,7 +174,7 @@ export interface PlaceClaimResult {
 
 /**
  * Place a claim after validation. Displaces conditionals when a full claim
- * is placed. Dual-writes events for each side effect.
+ * is placed. All materialized writes and event appends are batched atomically.
  */
 export async function placeClaim(
   db: DrizzleD1Database,
@@ -181,8 +182,10 @@ export async function placeClaim(
   claim: { id: string; userId: string; characterId: number; claimType: ClaimType; rank: number | null },
 ): Promise<PlaceClaimResult> {
   const eventIds: string[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const writes: any[] = [];
 
-  // If full-claiming, displace any conditional on this character
+  // If full-claiming, find and displace any conditional on this character
   if (claim.claimType === "claimed") {
     const displaced = await db
       .select()
@@ -196,8 +199,8 @@ export async function placeClaim(
       );
 
     for (const d of displaced) {
-      await db.delete(characterClaims).where(eq(characterClaims.id, d.id));
-      const eid = await appendEvent(db, {
+      writes.push(db.delete(characterClaims).where(eq(characterClaims.id, d.id)));
+      const ev = buildEventInsert(db, {
         partyId,
         userId: claim.userId,
         type: "claim_displaced",
@@ -208,21 +211,24 @@ export async function placeClaim(
           byUserId: claim.userId,
         },
       });
-      eventIds.push(eid);
+      writes.push(ev.query);
+      eventIds.push(ev.id);
     }
   }
 
-  await db.insert(characterClaims).values({
-    id: claim.id,
-    partyId,
-    characterId: claim.characterId,
-    userId: claim.userId,
-    claimType: claim.claimType,
-    rank: claim.rank,
-    createdAt: new Date(),
-  });
+  writes.push(
+    db.insert(characterClaims).values({
+      id: claim.id,
+      partyId,
+      characterId: claim.characterId,
+      userId: claim.userId,
+      claimType: claim.claimType,
+      rank: claim.rank,
+      createdAt: new Date(),
+    }),
+  );
 
-  const eid = await appendEvent(db, {
+  const ev = buildEventInsert(db, {
     partyId,
     userId: claim.userId,
     type: "claim_placed",
@@ -233,7 +239,10 @@ export async function placeClaim(
       rank: claim.rank,
     },
   });
-  eventIds.push(eid);
+  writes.push(ev.query);
+  eventIds.push(ev.id);
+
+  await db.batch(writes as [typeof writes[0], ...typeof writes]);
 
   return { claimId: claim.id, eventIds };
 }
@@ -246,7 +255,7 @@ export interface AutoPromoteResult {
 /**
  * Auto-promote: for each character with exactly one conditional and no
  * "claimed", promote that conditional to "claimed".
- * Dual-writes a claim_promoted event for each promotion.
+ * All promotions and events are batched atomically.
  */
 export async function autoPromote(
   db: DrizzleD1Database,
@@ -271,14 +280,23 @@ export async function autoPromote(
     }
   }
 
-  const eventIds: string[] = [];
-  for (const claim of toPromote) {
-    await db
-      .update(characterClaims)
-      .set({ claimType: "claimed" })
-      .where(eq(characterClaims.id, claim.id));
+  if (toPromote.length === 0) {
+    return { promotedCount: 0, eventIds: [] };
+  }
 
-    const eid = await appendEvent(db, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const writes: any[] = [];
+  const eventIds: string[] = [];
+
+  for (const claim of toPromote) {
+    writes.push(
+      db
+        .update(characterClaims)
+        .set({ claimType: "claimed" })
+        .where(eq(characterClaims.id, claim.id)),
+    );
+
+    const ev = buildEventInsert(db, {
       partyId,
       userId: claim.userId,
       type: "claim_promoted",
@@ -288,8 +306,11 @@ export async function autoPromote(
         userId: claim.userId,
       },
     });
-    eventIds.push(eid);
+    writes.push(ev.query);
+    eventIds.push(ev.id);
   }
+
+  await db.batch(writes as [typeof writes[0], ...typeof writes]);
 
   return { promotedCount: toPromote.length, eventIds };
 }
@@ -300,7 +321,7 @@ export type CancelClaimError = "claim_not_found" | "not_claim_owner" | "party_lo
 
 /**
  * Cancel a conditional or full claim. Only the claim owner can cancel.
- * Returns the event ID on success, or an error string.
+ * Deletion and event append are batched atomically.
  */
 export async function cancelClaim(
   db: DrizzleD1Database,
@@ -309,7 +330,7 @@ export async function cancelClaim(
   characterId: number,
   claimType: "conditional" | "claimed",
 ): Promise<{ eventId: string } | { error: CancelClaimError }> {
-  // Check party status
+  // Read phase: validate
   const party = await db
     .select({ status: parties.status })
     .from(parties)
@@ -317,7 +338,6 @@ export async function cancelClaim(
     .get();
   if (party?.status === "locked") return { error: "party_locked" };
 
-  // Check membership
   const membership = await db
     .select()
     .from(partyMembers)
@@ -330,7 +350,6 @@ export async function cancelClaim(
     .get();
   if (!membership) return { error: "not_a_member" };
 
-  // Find the claim
   const claim = await db
     .select()
     .from(characterClaims)
@@ -346,11 +365,8 @@ export async function cancelClaim(
 
   if (!claim) return { error: "claim_not_found" };
 
-  // Delete the claim
-  await db.delete(characterClaims).where(eq(characterClaims.id, claim.id));
-
-  // Log event
-  const eventId = await appendEvent(db, {
+  // Write phase: delete claim + append event atomically
+  const ev = buildEventInsert(db, {
     partyId,
     userId,
     type: "claim_cancelled",
@@ -361,5 +377,10 @@ export async function cancelClaim(
     },
   });
 
-  return { eventId };
+  await db.batch([
+    db.delete(characterClaims).where(eq(characterClaims.id, claim.id)),
+    ev.query,
+  ]);
+
+  return { eventId: ev.id };
 }
