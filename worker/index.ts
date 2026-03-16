@@ -124,7 +124,7 @@ app.get("/api/auth/callback", async (c) => {
 
   const response = new Response(null, {
     status: 302,
-    headers: { Location: "/" },
+    headers: { Location: "/profile" },
   });
   response.headers.append(
     "Set-Cookie",
