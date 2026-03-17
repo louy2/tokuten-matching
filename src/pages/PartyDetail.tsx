@@ -102,6 +102,55 @@ const STATE_BADGE_COLORS: Record<SlotState, string> = {
   claimed: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
 };
 
+function ClaimLegend({ t }: { t: (key: string) => string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300"
+      >
+        {t("claimLegend.title")}
+        <span className="text-xs text-blue-600 dark:text-blue-400">
+          {open ? t("claimLegend.hide") : t("claimLegend.show")}
+        </span>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-4">
+          {/* Slot states */}
+          <div className="space-y-2">
+            {(["open", "conditional", "contested", "claimed"] as const).map((state) => (
+              <div key={state} className="flex items-start gap-2">
+                <span className={`text-xs px-1.5 py-0.5 rounded-full mt-0.5 shrink-0 ${STATE_BADGE_COLORS[state]}`}>
+                  {t(`slotState.${state}`)}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-gray-400">
+                  {t(`slotStateDesc.${state}`)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Claim types */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2">
+            {(["preference", "conditional", "claimed"] as const).map((type) => (
+              <div key={type} className="flex items-start gap-2">
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 shrink-0 mt-0.5">
+                  {t(`claimType.${type}`)}
+                </span>
+                <span className="text-xs text-gray-600 dark:text-gray-400">
+                  {t(`claimTypeDesc.${type}`)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PartyDetail() {
   const { partyId } = useParams();
   const { t } = useTranslation();
@@ -363,6 +412,9 @@ export function PartyDetail() {
           )}
         </div>
       </div>
+
+      {/* Claim legend */}
+      <ClaimLegend t={t} />
 
       {/* Character Grid */}
       <div>
