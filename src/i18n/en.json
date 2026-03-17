@@ -63,7 +63,9 @@
     "mituoriBoardUnclaimed": "No one has claimed the board yet",
     "mituoriBoardClaimed": "Claimed",
     "claimBoard": "Claim board",
-    "unclaimBoard": "Unclaim board"
+    "unclaimBoard": "Unclaim board",
+    "shareToDiscord": "Share to Discord",
+    "shareCopied": "Copied!"
   },
   "createParty": {
     "title": "Create a Party",

@@ -63,7 +63,9 @@
     "mituoriBoardUnclaimed": "还没有人认领展板",
     "mituoriBoardClaimed": "已认领",
     "claimBoard": "认领展板",
-    "unclaimBoard": "取消认领展板"
+    "unclaimBoard": "取消认领展板",
+    "shareToDiscord": "分享到Discord",
+    "shareCopied": "已复制！"
   },
   "createParty": {
     "title": "创建队伍",

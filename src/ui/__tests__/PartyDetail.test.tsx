@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PartyDetail } from "../../pages/PartyDetail";
@@ -782,5 +782,81 @@ describe("PartyDetail — preferences display", () => {
     expect(screen.getByText("2 interested")).toBeInTheDocument();
     // Character 3 (Shizuku) has 1 preference
     expect(screen.getByText("1 interested")).toBeInTheDocument();
+  });
+});
+
+describe("PartyDetail — Discord share button", () => {
+  let writeTextMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    writeTextMock = vi.fn().mockResolvedValue(undefined);
+    // Mock clipboard API
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText: writeTextMock },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it("shows share to Discord button", async () => {
+    const party = makePartyData({
+      members: [makeMember("leader-1", "LeaderUser")],
+    });
+    setupFetchMock(null, { "/api/parties/party-1": party });
+
+    renderWithProviders(<PartyDetail />, { route: "/parties/party-1", routePath: "/parties/:partyId" });
+    await waitFor(() => {
+      expect(screen.getByText("Test Party")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /Share to Discord/ })).toBeInTheDocument();
+  });
+
+  it("copies formatted message to clipboard when clicked", async () => {
+    const party = makePartyData({
+      members: [
+        makeMember("leader-1", "LeaderUser"),
+        makeMember("user-2", "User2"),
+      ],
+      claims: [makeClaim(1, "leader-1", "LeaderUser", "claimed")],
+    });
+    setupFetchMock(null, { "/api/parties/party-1": party });
+    const user = userEvent.setup();
+
+    renderWithProviders(<PartyDetail />, { route: "/parties/party-1", routePath: "/parties/:partyId" });
+    await waitFor(() => {
+      expect(screen.getByText("Test Party")).toBeInTheDocument();
+    });
+
+    // Spy on the clipboard that the component will actually use
+    const clipboardSpy = vi.spyOn(navigator.clipboard, "writeText");
+
+    await user.click(screen.getByRole("button", { name: /Share to Discord/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Copied!")).toBeInTheDocument();
+    });
+    // Verify writeText was called with formatted party data
+    expect(clipboardSpy).toHaveBeenCalledTimes(1);
+    const copiedText = clipboardSpy.mock.calls[0][0];
+    expect(copiedText).toContain("**Test Party**");
+    expect(copiedText).toContain("2/12 members");
+    expect(copiedText).toContain("1 claimed");
+  });
+
+  it("shows copied feedback after clicking share button", async () => {
+    const party = makePartyData({
+      members: [makeMember("leader-1", "LeaderUser")],
+    });
+    setupFetchMock(null, { "/api/parties/party-1": party });
+    const user = userEvent.setup();
+
+    renderWithProviders(<PartyDetail />, { route: "/parties/party-1", routePath: "/parties/:partyId" });
+    await waitFor(() => {
+      expect(screen.getByText("Test Party")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /Share to Discord/ }));
+
+    expect(screen.getByText("Copied!")).toBeInTheDocument();
   });
 });
