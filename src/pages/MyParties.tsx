@@ -1,7 +1,16 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useFetch } from "../hooks/useApi";
+import type { Language } from "../shared/types";
+
+const LANGUAGE_OPTIONS: { code: Language | ""; label: string; labelEn: string }[] = [
+  { code: "", label: "すべて", labelEn: "All" },
+  { code: "ja", label: "日本語", labelEn: "Japanese" },
+  { code: "en", label: "English", labelEn: "English" },
+  { code: "zh", label: "中文", labelEn: "Chinese" },
+];
 
 interface MyPartyRow {
   id: string;
@@ -14,13 +23,24 @@ interface MyPartyRow {
 }
 
 export function MyParties() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, loading: authLoading, login } = useAuth();
+  const [langFilter, setLangFilter] = useState<string>("");
   const { data, loading } = useFetch<{ parties: MyPartyRow[] }>(
     user ? "/api/my-parties" : null,
   );
 
-  const parties = data?.parties ?? [];
+  const allParties = data?.parties ?? [];
+  const parties = langFilter
+    ? allParties.filter((party) => {
+        try {
+          const languages: string[] = JSON.parse(party.languages);
+          return languages.includes(langFilter);
+        } catch {
+          return false;
+        }
+      })
+    : allParties;
 
   if (authLoading || loading) {
     return (
@@ -47,7 +67,24 @@ export function MyParties() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">{t("nav.myParties")}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">{t("nav.myParties")}</h1>
+        <div className="flex gap-1">
+          {LANGUAGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.code}
+              onClick={() => setLangFilter(opt.code)}
+              className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                langFilter === opt.code
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              {i18n.language === "en" ? opt.labelEn : opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {parties.length === 0 ? (
         <div className="text-center py-12">

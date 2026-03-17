@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MyParties } from "../../pages/MyParties";
 import { renderWithProviders, setupFetchMock, mockUser } from "./helpers";
 
@@ -158,5 +159,129 @@ describe("MyParties — loading state", () => {
     setupFetchMock(mockUser, { "/api/my-parties": { parties: [] } });
     renderWithProviders(<MyParties />);
     expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+  });
+});
+
+describe("MyParties — language filtering", () => {
+  const mixedParties = {
+    parties: [
+      {
+        id: "p1",
+        name: "Japanese Party",
+        status: "open",
+        languages: '["ja"]',
+        leaderId: "user-1",
+        memberCount: 3,
+        claimedCount: 1,
+      },
+      {
+        id: "p2",
+        name: "English Party",
+        status: "open",
+        languages: '["en"]',
+        leaderId: "other",
+        memberCount: 5,
+        claimedCount: 2,
+      },
+      {
+        id: "p3",
+        name: "Bilingual Party",
+        status: "locked",
+        languages: '["ja","en"]',
+        leaderId: "other2",
+        memberCount: 12,
+        claimedCount: 12,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    setupFetchMock(mockUser, { "/api/my-parties": mixedParties });
+  });
+
+  it("renders all 4 language filter buttons", async () => {
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "All" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Japanese" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Chinese" })).toBeInTheDocument();
+  });
+
+  it("shows all parties by default", async () => {
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    });
+    expect(screen.getByText("English Party")).toBeInTheDocument();
+    expect(screen.getByText("Bilingual Party")).toBeInTheDocument();
+  });
+
+  it("filters parties when Japanese filter is clicked", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Japanese" }));
+
+    // Japanese Party and Bilingual Party (has ja) should be visible
+    expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    expect(screen.getByText("Bilingual Party")).toBeInTheDocument();
+    // English-only party should be hidden
+    expect(screen.queryByText("English Party")).not.toBeInTheDocument();
+  });
+
+  it("filters parties when English filter is clicked", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "English" }));
+
+    expect(screen.getByText("English Party")).toBeInTheDocument();
+    expect(screen.getByText("Bilingual Party")).toBeInTheDocument();
+    expect(screen.queryByText("Japanese Party")).not.toBeInTheDocument();
+  });
+
+  it("shows all parties again when All filter is clicked after filtering", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    });
+
+    // Filter to Japanese first
+    await user.click(screen.getByRole("button", { name: "Japanese" }));
+    expect(screen.queryByText("English Party")).not.toBeInTheDocument();
+
+    // Click All to reset
+    await user.click(screen.getByRole("button", { name: "All" }));
+    expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    expect(screen.getByText("English Party")).toBeInTheDocument();
+    expect(screen.getByText("Bilingual Party")).toBeInTheDocument();
+  });
+
+  it("highlights the active filter button", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Japanese Party")).toBeInTheDocument();
+    });
+
+    // All button should be active by default
+    const allBtn = screen.getByRole("button", { name: "All" });
+    expect(allBtn.className).toContain("bg-blue-600");
+
+    // Click Japanese filter
+    await user.click(screen.getByRole("button", { name: "Japanese" }));
+    const jaBtn = screen.getByRole("button", { name: "Japanese" });
+    expect(jaBtn.className).toContain("bg-blue-600");
+    expect(allBtn.className).not.toContain("bg-blue-600");
   });
 });
