@@ -422,6 +422,7 @@ app.get("/api/my-parties", async (c) => {
   const partyIdRef = sql.raw('"parties"."id"');
   const memberCountSq = sql<number>`(SELECT COUNT(*) FROM party_members pm WHERE pm.party_id = ${partyIdRef})`.as("memberCount");
   const claimedCountSq = sql<number>`(SELECT COUNT(*) FROM character_claims cc WHERE cc.party_id = ${partyIdRef} AND cc.claim_type = 'claimed')`.as("claimedCount");
+  const claimedCharacterIdsSq = sql<string>`(SELECT '[' || GROUP_CONCAT(cc.character_id) || ']' FROM character_claims cc WHERE cc.party_id = ${partyIdRef} AND cc.claim_type = 'claimed')`.as("claimedCharacterIds");
 
   const rows = await db
     .select({
@@ -433,6 +434,7 @@ app.get("/api/my-parties", async (c) => {
       createdAt: parties.createdAt,
       memberCount: memberCountSq,
       claimedCount: claimedCountSq,
+      claimedCharacterIds: claimedCharacterIdsSq,
     })
     .from(parties)
     .innerJoin(partyMembers, eq(partyMembers.partyId, parties.id))
