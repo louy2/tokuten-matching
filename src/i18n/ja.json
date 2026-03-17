@@ -63,7 +63,9 @@
     "mituoriBoardUnclaimed": "まだ誰もボードを確保していません",
     "mituoriBoardClaimed": "確保済み",
     "claimBoard": "ボードを確保",
-    "unclaimBoard": "ボードの確保を取消"
+    "unclaimBoard": "ボードの確保を取消",
+    "shareToDiscord": "Discordで共有",
+    "shareCopied": "コピーしました！"
   },
   "createParty": {
     "title": "パーティーを作る",
