@@ -10,7 +10,7 @@ function makeInput(overrides: Partial<DiscordShareInput> = {}): DiscordShareInpu
     claimedCount: 2,
     contestedCount: 1,
     languages: ["en", "ja"],
-    costPerPerson: 7200,
+    pricePerCard: 1800,
     partyUrl: "https://tokuten.example.com/parties/abc123",
     status: "open",
     ...overrides,
@@ -36,9 +36,10 @@ describe("formatDiscordShareMessage", () => {
     expect(msg).toContain("日本語");
   });
 
-  it("includes cost per person", () => {
+  it("includes price per card instead of per person", () => {
     const msg = formatDiscordShareMessage(makeInput());
-    expect(msg).toContain("¥7,200");
+    expect(msg).toContain("¥1,800 per card");
+    expect(msg).not.toContain("per person");
   });
 
   it("includes party URL", () => {
@@ -76,7 +77,6 @@ describe("formatDiscordShareMessage", () => {
       claimedCount: 12,
     }));
     expect(msg).toContain("12/12 members");
-    // Should not say "Looking for members" when full
     expect(msg).not.toContain("Looking for members");
   });
 
@@ -95,5 +95,31 @@ describe("formatDiscordShareMessage", () => {
     expect(msg).toContain("日本語");
     expect(msg).toContain("English");
     expect(msg).toContain("中文");
+  });
+
+  it("includes product name", () => {
+    const msg = formatDiscordShareMessage(makeInput());
+    expect(msg).toContain("特典コンプリートセット（12枚）");
+  });
+
+  it("includes set price ¥21,600", () => {
+    const msg = formatDiscordShareMessage(makeInput());
+    expect(msg).toContain("¥21,600");
+  });
+
+  it("includes sale date 2026年5月15日", () => {
+    const msg = formatDiscordShareMessage(makeInput());
+    expect(msg).toContain("2026年5月15日");
+  });
+
+  it("includes official ticket URL", () => {
+    const msg = formatDiscordShareMessage(makeInput());
+    expect(msg).toContain("https://www.lovelive-anime.jp/nijigasaki/movie/Chapter3/ticket.php#ticket_1st_set");
+  });
+
+  it("includes ムビチケカード特典 and 三つ折りボード", () => {
+    const msg = formatDiscordShareMessage(makeInput());
+    expect(msg).toContain("ムビチケカード特典全12種");
+    expect(msg).toContain("三つ折りボード");
   });
 });

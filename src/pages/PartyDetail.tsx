@@ -217,7 +217,7 @@ export function PartyDetail() {
       claimedCount,
       contestedCount,
       languages,
-      costPerPerson: costPer,
+      pricePerCard: Math.ceil(SET_PRICE_YEN / 12),
       partyUrl: `${window.location.origin}/parties/${party.id}`,
       status: party.status as PartyStatus,
     });
