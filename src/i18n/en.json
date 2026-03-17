@@ -79,7 +79,8 @@
   },
   "myParties": {
     "loginRequired": "Log in to see your parties.",
-    "empty": "You haven't joined any parties yet."
+    "empty": "You haven't joined any parties yet.",
+    "fromProfile": "From Profile"
   },
   "profile": {
     "title": "Profile",

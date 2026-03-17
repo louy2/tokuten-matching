@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MyParties } from "../../pages/MyParties";
-import { renderWithProviders, setupFetchMock, mockUser } from "./helpers";
+import { renderWithProviders, setupFetchMock, mockUser, mockLeader } from "./helpers";
 
 describe("MyParties — login required", () => {
   it("shows login required message when not authenticated", async () => {
@@ -283,5 +283,222 @@ describe("MyParties — language filtering", () => {
     const jaBtn = screen.getByRole("button", { name: "Japanese" });
     expect(jaBtn.className).toContain("bg-blue-600");
     expect(allBtn.className).not.toContain("bg-blue-600");
+  });
+});
+
+describe("MyParties — character filtering", () => {
+  // Party A: characters 1,3 claimed → open: 2,4,5,6,7,8,9,10,11,12
+  // Party B: characters 1,2,5 claimed → open: 3,4,6,7,8,9,10,11,12
+  // Party C: all 12 claimed → open: none
+  const partiesWithClaims = {
+    parties: [
+      {
+        id: "p1",
+        name: "Party A",
+        status: "open",
+        languages: '["ja"]',
+        leaderId: "user-1",
+        memberCount: 3,
+        claimedCount: 2,
+        claimedCharacterIds: "[1,3]",
+      },
+      {
+        id: "p2",
+        name: "Party B",
+        status: "open",
+        languages: '["en"]',
+        leaderId: "other",
+        memberCount: 5,
+        claimedCount: 3,
+        claimedCharacterIds: "[1,2,5]",
+      },
+      {
+        id: "p3",
+        name: "Party C",
+        status: "locked",
+        languages: '["ja"]',
+        leaderId: "other2",
+        memberCount: 12,
+        claimedCount: 12,
+        claimedCharacterIds: "[1,2,3,4,5,6,7,8,9,10,11,12]",
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    setupFetchMock(mockUser, { "/api/my-parties": partiesWithClaims });
+  });
+
+  it("renders character filter buttons for all 12 characters", async () => {
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+    // In English, character names are rendered
+    expect(screen.getByRole("button", { name: "Ayumu Uehara" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kasumi Nakasu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lanzhu Zhong" })).toBeInTheDocument();
+  });
+
+  it("shows all parties when no character filter is selected", async () => {
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.getByText("Party C")).toBeInTheDocument();
+  });
+
+  it("filters to parties where selected character is open", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    // Click "Shizuku Osaka" (id=3) — claimed in Party A, open in Party B, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Shizuku Osaka" }));
+
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.queryByText("Party A")).not.toBeInTheDocument();
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+  });
+
+  it("filters with multiple selected characters (OR logic)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    // Click "Kasumi Nakasu" (id=2) — open in Party A, claimed in Party B, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Kasumi Nakasu" }));
+    // Click "Ai Miyashita" (id=5) — open in Party A, claimed in Party B, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Ai Miyashita" }));
+
+    // Only Party A has either character 2 or 5 open
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.queryByText("Party B")).not.toBeInTheDocument();
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+  });
+
+  it("deselects a character filter on second click", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    // Select then deselect character 3
+    await user.click(screen.getByRole("button", { name: "Shizuku Osaka" }));
+    expect(screen.queryByText("Party A")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Shizuku Osaka" }));
+    // All parties visible again
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.getByText("Party C")).toBeInTheDocument();
+  });
+
+  it("combines language and character filters", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    // Filter by Japanese language
+    await user.click(screen.getByRole("button", { name: "Japanese" }));
+    // Party A (ja) and Party C (ja) visible, Party B (en) hidden
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.getByText("Party C")).toBeInTheDocument();
+    expect(screen.queryByText("Party B")).not.toBeInTheDocument();
+
+    // Also filter by character 2 (Kasumi) — open in Party A, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Kasumi Nakasu" }));
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+  });
+});
+
+describe("MyParties — from profile character filter", () => {
+  const partiesWithClaims = {
+    parties: [
+      {
+        id: "p1",
+        name: "Party X",
+        status: "open",
+        languages: '["ja"]',
+        leaderId: "leader-1",
+        memberCount: 3,
+        claimedCount: 2,
+        claimedCharacterIds: "[1,3]",
+      },
+      {
+        id: "p2",
+        name: "Party Y",
+        status: "open",
+        languages: '["en"]',
+        leaderId: "other",
+        memberCount: 5,
+        claimedCount: 3,
+        claimedCharacterIds: "[1,3,5]",
+      },
+    ],
+  };
+
+  it("renders a 'From Profile' button", async () => {
+    setupFetchMock(mockLeader, { "/api/my-parties": partiesWithClaims });
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party X")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "From Profile" })).toBeInTheDocument();
+  });
+
+  it("applies user's character preferences as filters when clicked", async () => {
+    // mockLeader has characterPreferences: [1, 3, 5]
+    setupFetchMock(mockLeader, { "/api/my-parties": partiesWithClaims });
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party X")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "From Profile" }));
+
+    // Character 1 is claimed in both parties
+    // Character 3 is claimed in both parties
+    // Character 5 is open in Party X, claimed in Party Y
+    // So only Party X has any of [1,3,5] open (character 5)
+    expect(screen.getByText("Party X")).toBeInTheDocument();
+    expect(screen.queryByText("Party Y")).not.toBeInTheDocument();
+  });
+
+  it("clears character filter when 'From Profile' is clicked again", async () => {
+    setupFetchMock(mockLeader, { "/api/my-parties": partiesWithClaims });
+    const user = userEvent.setup();
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party X")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "From Profile" }));
+    expect(screen.queryByText("Party Y")).not.toBeInTheDocument();
+
+    // Click again to clear
+    await user.click(screen.getByRole("button", { name: "From Profile" }));
+    expect(screen.getByText("Party X")).toBeInTheDocument();
+    expect(screen.getByText("Party Y")).toBeInTheDocument();
+  });
+
+  it("does not show 'From Profile' button when user has no preferences", async () => {
+    // mockUser has characterPreferences: []
+    setupFetchMock(mockUser, { "/api/my-parties": partiesWithClaims });
+    renderWithProviders(<MyParties />);
+    await waitFor(() => {
+      expect(screen.getByText("Party X")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "From Profile" })).not.toBeInTheDocument();
   });
 });

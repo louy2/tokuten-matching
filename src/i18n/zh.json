@@ -79,7 +79,8 @@
   },
   "myParties": {
     "loginRequired": "登录以查看你的队伍。",
-    "empty": "你还没有加入任何队伍。"
+    "empty": "你还没有加入任何队伍。",
+    "fromProfile": "从个人资料"
   },
   "profile": {
     "title": "个人资料",
