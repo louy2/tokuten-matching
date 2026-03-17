@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PartyList } from "../../pages/PartyList";
-import { renderWithProviders, setupFetchMock, setupFetchErrorMock, mockUser } from "./helpers";
+import { renderWithProviders, setupFetchMock, setupFetchErrorMock, mockUser, mockLeader } from "./helpers";
 
 const openParties = {
   parties: [
@@ -39,6 +39,204 @@ const jaParties = {
 };
 
 const emptyParties = { parties: [] };
+
+const partiesWithClaims = {
+  parties: [
+    {
+      id: "p1",
+      name: "Party A",
+      languages: '["ja"]',
+      createdAt: "2025-01-01",
+      memberCount: 3,
+      claimedCount: 2,
+      claimedCharacterIds: "[1,3]",
+    },
+    {
+      id: "p2",
+      name: "Party B",
+      languages: '["en"]',
+      createdAt: "2025-01-02",
+      memberCount: 5,
+      claimedCount: 3,
+      claimedCharacterIds: "[1,2,5]",
+    },
+    {
+      id: "p3",
+      name: "Party C",
+      languages: '["ja"]',
+      createdAt: "2025-01-03",
+      memberCount: 12,
+      claimedCount: 12,
+      claimedCharacterIds: "[1,2,3,4,5,6,7,8,9,10,11,12]",
+    },
+  ],
+};
+
+describe("PartyList — character filtering", () => {
+  beforeEach(() => {
+    setupFetchMock(null, { "/api/parties": partiesWithClaims });
+  });
+
+  it("renders character filter buttons for all 12 characters", async () => {
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Ayumu Uehara" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kasumi Nakasu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lanzhu Zhong" })).toBeInTheDocument();
+  });
+
+  it("shows all parties when no character filter is selected", async () => {
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.getByText("Party C")).toBeInTheDocument();
+  });
+
+  it("filters to parties where selected character is open", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    // Click "Shizuku Osaka" (id=3) — claimed in Party A, open in Party B, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Shizuku Osaka" }));
+
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.queryByText("Party A")).not.toBeInTheDocument();
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+  });
+
+  it("filters with multiple selected characters (OR logic)", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    // Click "Kasumi Nakasu" (id=2) — open in Party A, claimed in Party B, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Kasumi Nakasu" }));
+    // Click "Ai Miyashita" (id=5) — open in Party A, claimed in Party B, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Ai Miyashita" }));
+
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.queryByText("Party B")).not.toBeInTheDocument();
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+  });
+
+  it("deselects a character filter on second click", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Shizuku Osaka" }));
+    expect(screen.queryByText("Party A")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Shizuku Osaka" }));
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.getByText("Party C")).toBeInTheDocument();
+  });
+
+  it("combines language and character filters", async () => {
+    const user = userEvent.setup();
+    setupFetchMock(null, {
+      "/api/parties": partiesWithClaims,
+      "/api/parties?language=ja": {
+        parties: partiesWithClaims.parties.filter((p) =>
+          JSON.parse(p.languages).includes("ja"),
+        ),
+      },
+    });
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    // Filter by Japanese language
+    await user.click(screen.getByRole("button", { name: "Japanese" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Party B")).not.toBeInTheDocument();
+    });
+
+    // Also filter by character 2 (Kasumi) — open in Party A, claimed in Party C
+    await user.click(screen.getByRole("button", { name: "Kasumi Nakasu" }));
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+  });
+});
+
+describe("PartyList — from profile character filter", () => {
+  it("renders a 'From Profile' button when user has preferences", async () => {
+    setupFetchMock(mockLeader, { "/api/parties": partiesWithClaims });
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "From Profile" })).toBeInTheDocument();
+  });
+
+  it("applies user's character preferences as filters when clicked", async () => {
+    // mockLeader has characterPreferences: [1, 3, 5]
+    setupFetchMock(mockLeader, { "/api/parties": partiesWithClaims });
+    const user = userEvent.setup();
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "From Profile" }));
+
+    // Character 1 claimed in both A & B, character 3 claimed in A only, character 5 claimed in B only
+    // Party A: char 1 claimed, char 3 claimed, char 5 open → has open match → visible
+    // Party B: char 1 claimed, char 3 open, char 5 claimed → has open match → visible
+    // Party C: all claimed → no open match → hidden
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+  });
+
+  it("clears character filter when 'From Profile' is clicked again", async () => {
+    setupFetchMock(mockLeader, { "/api/parties": partiesWithClaims });
+    const user = userEvent.setup();
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "From Profile" }));
+    expect(screen.queryByText("Party C")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "From Profile" }));
+    expect(screen.getByText("Party A")).toBeInTheDocument();
+    expect(screen.getByText("Party B")).toBeInTheDocument();
+    expect(screen.getByText("Party C")).toBeInTheDocument();
+  });
+
+  it("does not show 'From Profile' button when user has no preferences", async () => {
+    setupFetchMock(mockUser, { "/api/parties": partiesWithClaims });
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "From Profile" })).not.toBeInTheDocument();
+  });
+
+  it("does not show 'From Profile' button when user is not logged in", async () => {
+    setupFetchMock(null, { "/api/parties": partiesWithClaims });
+    renderWithProviders(<PartyList />);
+    await waitFor(() => {
+      expect(screen.getByText("Party A")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "From Profile" })).not.toBeInTheDocument();
+  });
+});
 
 describe("PartyList — BROWSE scenarios", () => {
   describe("party discovery", () => {

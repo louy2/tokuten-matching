@@ -3,8 +3,6 @@ import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useFetch } from "../hooks/useApi";
-import { useCharacterName } from "../hooks/useCharacterName";
-import { CHARACTERS } from "../shared/characters";
 import type { Language } from "../shared/types";
 
 const LANGUAGE_OPTIONS: { code: Language | ""; label: string; labelEn: string }[] = [
@@ -33,9 +31,7 @@ function parseJsonArray<T>(json: string | null): T[] {
 export function MyParties() {
   const { t, i18n } = useTranslation();
   const { user, loading: authLoading, login } = useAuth();
-  const characterName = useCharacterName();
   const [langFilter, setLangFilter] = useState<string>("");
-  const [charFilter, setCharFilter] = useState<Set<number>>(new Set());
   const { data, loading } = useFetch<{ parties: MyPartyRow[] }>(
     user ? "/api/my-parties" : null,
   );
@@ -46,31 +42,8 @@ export function MyParties() {
       const languages = parseJsonArray<string>(party.languages);
       if (!languages.includes(langFilter)) return false;
     }
-    if (charFilter.size > 0) {
-      const claimed = parseJsonArray<number>(party.claimedCharacterIds);
-      const hasOpenMatch = [...charFilter].some((id) => !claimed.includes(id));
-      if (!hasOpenMatch) return false;
-    }
     return true;
   });
-
-  const toggleCharFilter = (id: number) => {
-    setCharFilter((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const applyProfilePreferences = () => {
-    if (!user) return;
-    if (charFilter.size > 0 && [...charFilter].every((id) => user.characterPreferences.includes(id)) && charFilter.size === user.characterPreferences.length) {
-      setCharFilter(new Set());
-    } else {
-      setCharFilter(new Set(user.characterPreferences));
-    }
-  };
 
   if (authLoading || loading) {
     return (
@@ -114,35 +87,6 @@ export function MyParties() {
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1 mb-4">
-        {CHARACTERS.map((char) => (
-          <button
-            key={char.id}
-            onClick={() => toggleCharFilter(char.id)}
-            className={`px-2 py-0.5 text-xs rounded-full transition-colors ${
-              charFilter.has(char.id)
-                ? "text-white"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-            }`}
-            style={charFilter.has(char.id) ? { backgroundColor: char.color } : undefined}
-          >
-            {characterName(char.id)}
-          </button>
-        ))}
-        {user && user.characterPreferences.length > 0 && (
-          <button
-            onClick={applyProfilePreferences}
-            className={`px-2 py-0.5 text-xs rounded-full transition-colors ${
-              charFilter.size > 0 && [...charFilter].every((id) => user.characterPreferences.includes(id)) && charFilter.size === user.characterPreferences.length
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-            }`}
-          >
-            {t("myParties.fromProfile")}
-          </button>
-        )}
       </div>
 
       {parties.length === 0 ? (
