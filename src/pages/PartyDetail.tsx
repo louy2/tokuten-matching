@@ -154,7 +154,7 @@ function ClaimLegend({ t }: { t: (key: string) => string }) {
 
 export function PartyDetail() {
   const { partyId } = useParams();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const charName = useCharacterName();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -220,6 +220,7 @@ export function PartyDetail() {
       pricePerCard: Math.ceil(SET_PRICE_YEN / 12),
       partyUrl: `${window.location.origin}/parties/${party.id}`,
       status: party.status as PartyStatus,
+      locale: i18n.language,
     });
     await navigator.clipboard.writeText(message);
     setShareCopied(true);

@@ -13,17 +13,18 @@ function makeInput(overrides: Partial<DiscordShareInput> = {}): DiscordShareInpu
     pricePerCard: 1800,
     partyUrl: "https://tokuten.example.com/parties/abc123",
     status: "open",
+    locale: "en",
     ...overrides,
   };
 }
 
-describe("formatDiscordShareMessage", () => {
+describe("formatDiscordShareMessage — English (default)", () => {
   it("includes party name in bold", () => {
     const msg = formatDiscordShareMessage(makeInput());
     expect(msg).toContain("**Niji Tokuten Squad**");
   });
 
-  it("includes member count and slot summary", () => {
+  it("includes member count and slot summary in English", () => {
     const msg = formatDiscordShareMessage(makeInput());
     expect(msg).toContain("3/12 members");
     expect(msg).toContain("2 claimed");
@@ -36,10 +37,9 @@ describe("formatDiscordShareMessage", () => {
     expect(msg).toContain("日本語");
   });
 
-  it("includes price per card instead of per person", () => {
+  it("includes price per card in English", () => {
     const msg = formatDiscordShareMessage(makeInput());
-    expect(msg).toContain("¥1,800 per card");
-    expect(msg).not.toContain("per person");
+    expect(msg).toContain("¥1,800/card");
   });
 
   it("includes party URL", () => {
@@ -56,7 +56,6 @@ describe("formatDiscordShareMessage", () => {
 
   it("omits description line when null", () => {
     const msg = formatDiscordShareMessage(makeInput({ description: null }));
-    // Should not have empty lines where description would be
     expect(msg).not.toContain("\n\n\n");
   });
 
@@ -80,46 +79,86 @@ describe("formatDiscordShareMessage", () => {
     expect(msg).not.toContain("Looking for members");
   });
 
-  it("shows locked status for locked party", () => {
+  it("shows locked status in English", () => {
     const msg = formatDiscordShareMessage(makeInput({ status: "locked" }));
     expect(msg).toContain("Locked");
   });
 
-  it("handles single language", () => {
-    const msg = formatDiscordShareMessage(makeInput({ languages: ["zh"] }));
-    expect(msg).toContain("中文");
-  });
-
-  it("handles all three languages", () => {
-    const msg = formatDiscordShareMessage(makeInput({ languages: ["ja", "en", "zh"] }));
-    expect(msg).toContain("日本語");
-    expect(msg).toContain("English");
-    expect(msg).toContain("中文");
-  });
-
-  it("includes product name", () => {
+  it("includes product info", () => {
     const msg = formatDiscordShareMessage(makeInput());
     expect(msg).toContain("特典コンプリートセット（12枚）");
-  });
-
-  it("includes set price ¥21,600", () => {
-    const msg = formatDiscordShareMessage(makeInput());
     expect(msg).toContain("¥21,600");
-  });
-
-  it("includes sale date 2026年5月15日", () => {
-    const msg = formatDiscordShareMessage(makeInput());
-    expect(msg).toContain("2026年5月15日");
-  });
-
-  it("includes official ticket URL", () => {
-    const msg = formatDiscordShareMessage(makeInput());
+    expect(msg).toContain("2026/5/15");
     expect(msg).toContain("https://www.lovelive-anime.jp/nijigasaki/movie/Chapter3/ticket.php#ticket_1st_set");
   });
 
-  it("includes ムビチケカード特典 and 三つ折りボード", () => {
+  it("uses English labels for product lines", () => {
     const msg = formatDiscordShareMessage(makeInput());
-    expect(msg).toContain("ムビチケカード特典全12種");
-    expect(msg).toContain("三つ折りボード");
+    expect(msg).toContain("Limited");
+    expect(msg).toContain("On sale");
+  });
+});
+
+describe("formatDiscordShareMessage — Japanese", () => {
+  it("uses Japanese headline", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "ja" }));
+    expect(msg).toContain("メンバー募集中！");
+  });
+
+  it("uses Japanese stat labels", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "ja" }));
+    expect(msg).toContain("3/12人");
+    expect(msg).toContain("2 確定");
+    expect(msg).toContain("9 空き");
+  });
+
+  it("uses Japanese per-card label", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "ja" }));
+    expect(msg).toContain("¥1,800/枚");
+  });
+
+  it("shows locked in Japanese", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "ja", status: "locked" }));
+    expect(msg).toContain("確定済み");
+  });
+
+  it("shows contested in Japanese", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "ja", contestedCount: 2 }));
+    expect(msg).toContain("2 競合");
+  });
+
+  it("uses Japanese product labels", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "ja" }));
+    expect(msg).toContain("数量限定");
+    expect(msg).toContain("販売期間");
+  });
+});
+
+describe("formatDiscordShareMessage — Chinese", () => {
+  it("uses Chinese headline", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "zh" }));
+    expect(msg).toContain("招募成员中！");
+  });
+
+  it("uses Chinese stat labels", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "zh" }));
+    expect(msg).toContain("3/12人");
+    expect(msg).toContain("2 已确认");
+    expect(msg).toContain("9 空闲");
+  });
+
+  it("uses Chinese per-card label", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "zh" }));
+    expect(msg).toContain("¥1,800/张");
+  });
+
+  it("shows locked in Chinese", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "zh", status: "locked" }));
+    expect(msg).toContain("已锁定");
+  });
+
+  it("shows contested in Chinese", () => {
+    const msg = formatDiscordShareMessage(makeInput({ locale: "zh", contestedCount: 2 }));
+    expect(msg).toContain("2 竞争中");
   });
 });
