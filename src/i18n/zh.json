@@ -98,10 +98,26 @@
     "contested": "竞争中",
     "claimed": "已确认"
   },
+  "slotStateDesc": {
+    "open": "还没有人认领这个角色。你可以添加偏好或进行认领。",
+    "conditional": "一人暂定认领中。如果没有其他人竞争，将自动转为确认。",
+    "contested": "两人以上想要这个角色。请在群聊中讨论决定。",
+    "claimed": "这个角色已锁定。有人已承诺认领。"
+  },
   "claimType": {
     "preference": "偏好",
     "conditional": "暂定",
     "claimed": "已确认"
+  },
+  "claimTypeDesc": {
+    "preference": "表达兴趣的轻量信号。按喜好排列角色，帮助其他人了解哪些角色最受欢迎。",
+    "conditional": "暂时表示"我想要这个"。其他人仍可竞争。如无竞争，将自动升级为确认。",
+    "claimed": "正式承诺——你将认领这个角色。每个角色只能有一人确认。"
+  },
+  "claimLegend": {
+    "title": "认领规则",
+    "hide": "隐藏说明",
+    "show": "显示说明"
   },
   "common": {
     "comingSoon": "即将推出…",

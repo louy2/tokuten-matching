@@ -98,10 +98,26 @@
     "contested": "Contested",
     "claimed": "Claimed"
   },
+  "slotStateDesc": {
+    "open": "No one has claimed this character yet. You can add a preference or place a claim.",
+    "conditional": "One person has a tentative claim. It becomes final if no one else contests it.",
+    "contested": "Two or more people want this character. Discuss in the group chat to decide.",
+    "claimed": "This character is locked in. Someone has committed to taking it."
+  },
   "claimType": {
     "preference": "Preferences",
     "conditional": "Conditional",
     "claimed": "Claimed"
+  },
+  "claimTypeDesc": {
+    "preference": "A soft signal of interest. Rank the characters you'd like — this helps others see what's popular.",
+    "conditional": "A tentative \"I want this one.\" Others can still contest it. Auto-promotes to claimed if uncontested.",
+    "claimed": "A firm commitment — you're taking this character. Only one person can claim each character."
+  },
+  "claimLegend": {
+    "title": "How claiming works",
+    "hide": "Hide guide",
+    "show": "Show guide"
   },
   "common": {
     "comingSoon": "Coming soon…",
