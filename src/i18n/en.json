@@ -93,7 +93,8 @@
     "characterPreferencesHint": "Rank the characters you want. Your preferences are shown automatically when you join a party.",
     "addCharacter": "Add a character",
     "noPreferencesYet": "No preferences set yet. Tap a character above to add.",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "authSlow": "Connection is taking a while… try reloading the page."
   },
   "slotState": {
     "open": "Open",

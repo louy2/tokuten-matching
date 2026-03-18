@@ -93,7 +93,8 @@
     "characterPreferencesHint": "按喜好顺序选择角色。加入队伍后会自动显示你的偏好。",
     "addCharacter": "添加角色",
     "noPreferencesYet": "还没有设置偏好。点击上方角色添加。",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "authSlow": "连接时间较长…请尝试刷新页面。"
   },
   "slotState": {
     "open": "空闲",

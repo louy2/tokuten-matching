@@ -7,7 +7,7 @@ import { CHARACTERS } from "../shared/characters";
 
 export function Profile() {
   const { t } = useTranslation();
-  const { user, loading, authError, login, logout, refresh } = useAuth();
+  const { user, loading, authError, authSlow, login, logout, refresh } = useAuth();
   const charName = useCharacterName();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -15,7 +15,13 @@ export function Profile() {
   if (loading) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <div className="inline-block w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+        <div className="inline-block w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+        <p className="mt-3 text-sm">{t("common.loading")}</p>
+        {authSlow && (
+          <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+            {t("profile.authSlow")}
+          </p>
+        )}
       </div>
     );
   }
