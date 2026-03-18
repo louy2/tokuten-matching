@@ -7,7 +7,7 @@ interface AuthState {
   loading: boolean;
   authError: string | null;
   login: () => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -16,7 +16,7 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   authError: null,
   login: () => {},
-  logout: () => {},
+  logout: async () => {},
   refresh: async () => {},
 });
 
@@ -60,9 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/api/auth/login";
   };
 
-  const logout = () => {
+  const logout = async () => {
     log.info("Logout initiated");
-    window.location.href = "/api/auth/logout";
+    setUser(null);
+    try {
+      await fetch("/api/auth/logout", { redirect: "manual" });
+    } catch {
+      // ignore network errors – cookie/session may already be cleared
+    }
+    window.location.href = "/";
   };
 
   return (
