@@ -17,6 +17,33 @@ import { upsertUser } from "../src/engine/users";
 
 const app = new Hono<{ Bindings: Env }>();
 
+// ─── Request logging middleware ─────────────────────────────
+
+app.use("/api/*", async (c, next) => {
+  const start = Date.now();
+  const method = c.req.method;
+  const path = c.req.path;
+  const ua = c.req.header("User-Agent") ?? "unknown";
+
+  console.log(JSON.stringify({
+    event: "request_start",
+    method,
+    path,
+    ua: ua.slice(0, 120),
+  }));
+
+  await next();
+
+  const duration = Date.now() - start;
+  console.log(JSON.stringify({
+    event: "request_end",
+    method,
+    path,
+    status: c.res.status,
+    duration_ms: duration,
+  }));
+});
+
 // ─── Auth routes ────────────────────────────────────────────
 
 app.get("/api/auth/me", async (c) => {
@@ -53,6 +80,11 @@ app.get("/api/auth/me", async (c) => {
 app.get("/api/auth/login", async (c) => {
   const state = crypto.randomUUID();
 
+  console.log(JSON.stringify({
+    event: "login_start",
+    ua: (c.req.header("User-Agent") ?? "").slice(0, 120),
+  }));
+
   const params = new URLSearchParams({
     client_id: c.env.DISCORD_CLIENT_ID,
     redirect_uri: c.env.DISCORD_REDIRECT_URI,
@@ -70,15 +102,58 @@ app.get("/api/auth/login", async (c) => {
   });
 });
 
+function authErrorPage(title: string, detail: string, status: number) {
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login Error</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb;color:#111827}
+.box{max-width:400px;text-align:center;padding:2rem}.title{font-size:1.25rem;font-weight:700;margin-bottom:.5rem}
+.detail{color:#6b7280;font-size:.875rem;margin-bottom:1.5rem}
+a{display:inline-block;padding:.5rem 1.5rem;background:#2563eb;color:#fff;border-radius:.5rem;text-decoration:none;font-size:.875rem}
+a:hover{background:#1d4ed8}</style></head>
+<body><div class="box"><div class="title">${title}</div><div class="detail">${detail}</div>
+<a href="/">Back to home</a></div></body></html>`;
+  return new Response(html, {
+    status,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
 app.get("/api/auth/callback", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state");
+  const errorParam = c.req.query("error");
+
+  // Discord may redirect back with an error (e.g., access_denied)
+  if (errorParam) {
+    console.log(JSON.stringify({
+      event: "oauth_callback_error",
+      error: errorParam,
+      error_description: c.req.query("error_description"),
+    }));
+    return authErrorPage(
+      "Login cancelled",
+      `Discord returned: ${errorParam}. Please try again.`,
+      400,
+    );
+  }
 
   const cookie = c.req.header("Cookie") ?? "";
   const savedState = cookie.match(/oauth_state=([^;]+)/)?.[1];
 
   if (!code || !state || state !== savedState) {
-    return c.text("Invalid OAuth state", 400);
+    console.log(JSON.stringify({
+      event: "oauth_state_mismatch",
+      hasCode: !!code,
+      hasState: !!state,
+      hasSavedState: !!savedState,
+      cookieHeader: cookie ? "present" : "missing",
+    }));
+    return authErrorPage(
+      "Login failed",
+      "Session state mismatch — your browser may be blocking cookies. If using Brave, try disabling Shields for this site.",
+      400,
+    );
   }
 
   // Exchange code for access token
@@ -94,7 +169,17 @@ app.get("/api/auth/callback", async (c) => {
     }),
   });
 
-  if (!tokenRes.ok) return c.text("Failed to exchange code for token", 502);
+  if (!tokenRes.ok) {
+    console.log(JSON.stringify({
+      event: "oauth_token_exchange_failed",
+      status: tokenRes.status,
+    }));
+    return authErrorPage(
+      "Login failed",
+      "Could not complete Discord authentication. Please try again.",
+      502,
+    );
+  }
 
   const tokenData = (await tokenRes.json()) as { access_token: string };
 
@@ -103,7 +188,17 @@ app.get("/api/auth/callback", async (c) => {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
 
-  if (!userRes.ok) return c.text("Failed to fetch Discord user", 502);
+  if (!userRes.ok) {
+    console.log(JSON.stringify({
+      event: "discord_user_fetch_failed",
+      status: userRes.status,
+    }));
+    return authErrorPage(
+      "Login failed",
+      "Could not fetch your Discord profile. Please try again.",
+      502,
+    );
+  }
 
   const discord = (await userRes.json()) as {
     id: string;
@@ -131,6 +226,12 @@ app.get("/api/auth/callback", async (c) => {
   await c.env.SESSIONS.put(`session:${sessionId}`, userId, {
     expirationTtl: 60 * 60 * 24 * 30,
   });
+
+  console.log(JSON.stringify({
+    event: "login_success",
+    userId,
+    ua: (c.req.header("User-Agent") ?? "").slice(0, 120),
+  }));
 
   const response = new Response(null, {
     status: 302,
