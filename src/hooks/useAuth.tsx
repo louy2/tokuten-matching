@@ -41,8 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/api/auth/login";
   };
 
-  const logout = () => {
-    window.location.href = "/api/auth/logout";
+  const logout = async () => {
+    setUser(null);
+    try {
+      await fetch("/api/auth/logout", { redirect: "manual" });
+    } catch {
+      // ignore network errors – cookie/session may already be cleared
+    }
+    window.location.href = "/";
   };
 
   return (
