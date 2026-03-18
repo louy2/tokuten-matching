@@ -7,7 +7,7 @@ import { CHARACTERS } from "../shared/characters";
 
 export function Profile() {
   const { t } = useTranslation();
-  const { user, loading, login, logout, refresh } = useAuth();
+  const { user, loading, authError, login, logout, refresh } = useAuth();
   const charName = useCharacterName();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -24,6 +24,11 @@ export function Profile() {
     return (
       <div className="text-center py-12">
         <h1 className="text-2xl font-bold mb-4">{t("profile.title")}</h1>
+        {authError && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 rounded-lg p-3 text-sm mb-4 max-w-md mx-auto">
+            {authError}
+          </div>
+        )}
         <p className="text-gray-500 mb-6">{t("profile.loginRequired")}</p>
         <button
           onClick={login}

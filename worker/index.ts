@@ -14,8 +14,50 @@ import { validateClaim, placeClaim, cancelClaim } from "../src/engine/claims";
 import { buildEventInsert } from "../src/engine/events";
 import { createParty, joinParty } from "../src/engine/parties";
 import { upsertUser } from "../src/engine/users";
+import { authErrorPage } from "./auth-error-page";
+import { redirectWithFallback } from "./redirect-with-fallback";
 
 const app = new Hono<{ Bindings: Env }>();
+
+// ─── Request logging middleware ─────────────────────────────
+
+app.use("/api/*", async (c, next) => {
+  const start = Date.now();
+  const method = c.req.method;
+  const path = c.req.path;
+  const ua = c.req.header("User-Agent") ?? "unknown";
+
+  console.log(JSON.stringify({
+    event: "request_start",
+    method,
+    path,
+    ua: ua.slice(0, 120),
+  }));
+
+  try {
+    await next();
+  } catch (err) {
+    const duration = Date.now() - start;
+    console.log(JSON.stringify({
+      event: "request_error",
+      method,
+      path,
+      duration_ms: duration,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    }));
+    throw err;
+  }
+
+  const duration = Date.now() - start;
+  console.log(JSON.stringify({
+    event: "request_end",
+    method,
+    path,
+    status: c.res.status,
+    duration_ms: duration,
+  }));
+});
 
 // ─── Auth routes ────────────────────────────────────────────
 
@@ -53,6 +95,11 @@ app.get("/api/auth/me", async (c) => {
 app.get("/api/auth/login", async (c) => {
   const state = crypto.randomUUID();
 
+  console.log(JSON.stringify({
+    event: "login_start",
+    ua: (c.req.header("User-Agent") ?? "").slice(0, 120),
+  }));
+
   const params = new URLSearchParams({
     client_id: c.env.DISCORD_CLIENT_ID,
     redirect_uri: c.env.DISCORD_REDIRECT_URI,
@@ -61,24 +108,47 @@ app.get("/api/auth/login", async (c) => {
     state,
   });
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: `https://discord.com/api/oauth2/authorize?${params}`,
-      "Set-Cookie": `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=600`,
-    },
-  });
+  return redirectWithFallback(
+    `https://discord.com/api/oauth2/authorize?${params}`,
+    { cookies: [`oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=600`] },
+  );
 });
 
 app.get("/api/auth/callback", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state");
+  const errorParam = c.req.query("error");
+
+  // Discord may redirect back with an error (e.g., access_denied)
+  if (errorParam) {
+    console.log(JSON.stringify({
+      event: "oauth_callback_error",
+      error: errorParam,
+      error_description: c.req.query("error_description"),
+    }));
+    return authErrorPage(
+      "Login cancelled",
+      `Discord returned: ${errorParam}. Please try again.`,
+      400,
+    );
+  }
 
   const cookie = c.req.header("Cookie") ?? "";
   const savedState = cookie.match(/oauth_state=([^;]+)/)?.[1];
 
   if (!code || !state || state !== savedState) {
-    return c.text("Invalid OAuth state", 400);
+    console.log(JSON.stringify({
+      event: "oauth_state_mismatch",
+      hasCode: !!code,
+      hasState: !!state,
+      hasSavedState: !!savedState,
+      cookieHeader: cookie ? "present" : "missing",
+    }));
+    return authErrorPage(
+      "Login failed",
+      "Session state mismatch — your browser may be blocking cookies. If using Brave, try disabling Shields for this site.",
+      400,
+    );
   }
 
   // Exchange code for access token
@@ -94,7 +164,17 @@ app.get("/api/auth/callback", async (c) => {
     }),
   });
 
-  if (!tokenRes.ok) return c.text("Failed to exchange code for token", 502);
+  if (!tokenRes.ok) {
+    console.log(JSON.stringify({
+      event: "oauth_token_exchange_failed",
+      status: tokenRes.status,
+    }));
+    return authErrorPage(
+      "Login failed",
+      "Could not complete Discord authentication. Please try again.",
+      502,
+    );
+  }
 
   const tokenData = (await tokenRes.json()) as { access_token: string };
 
@@ -103,7 +183,17 @@ app.get("/api/auth/callback", async (c) => {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
 
-  if (!userRes.ok) return c.text("Failed to fetch Discord user", 502);
+  if (!userRes.ok) {
+    console.log(JSON.stringify({
+      event: "discord_user_fetch_failed",
+      status: userRes.status,
+    }));
+    return authErrorPage(
+      "Login failed",
+      "Could not fetch your Discord profile. Please try again.",
+      502,
+    );
+  }
 
   const discord = (await userRes.json()) as {
     id: string;
@@ -132,19 +222,18 @@ app.get("/api/auth/callback", async (c) => {
     expirationTtl: 60 * 60 * 24 * 30,
   });
 
-  const response = new Response(null, {
-    status: 302,
-    headers: { Location: "/profile" },
+  console.log(JSON.stringify({
+    event: "login_success",
+    userId,
+    ua: (c.req.header("User-Agent") ?? "").slice(0, 120),
+  }));
+
+  return redirectWithFallback("/profile", {
+    cookies: [
+      `session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${60 * 60 * 24 * 30}`,
+      "oauth_state=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0",
+    ],
   });
-  response.headers.append(
-    "Set-Cookie",
-    `session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${60 * 60 * 24 * 30}`,
-  );
-  response.headers.append(
-    "Set-Cookie",
-    "oauth_state=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0",
-  );
-  return response;
 });
 
 app.get("/api/auth/logout", async (c) => {
@@ -155,12 +244,8 @@ app.get("/api/auth/logout", async (c) => {
     await c.env.SESSIONS.delete(`session:${sessionId}`);
   }
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: "/",
-      "Set-Cookie": "session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0",
-    },
+  return redirectWithFallback("/", {
+    cookies: ["session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0"],
   });
 });
 

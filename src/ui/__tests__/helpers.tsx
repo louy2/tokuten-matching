@@ -106,6 +106,51 @@ export function setupFetchErrorMock(user: AuthUser | null = null, errorRoutes: R
   return fetchMock;
 }
 
+/**
+ * Sets up fetch mock where /api/auth/me returns a non-200 status (to test authError state).
+ */
+export function setupAuthFailMock(status: number = 500) {
+  const fetchMock = vi.fn(async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
+    if (url.includes("/api/auth/me")) {
+      return new Response(JSON.stringify({ error: "Server error" }), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+/**
+ * Sets up fetch mock where /api/auth/me throws a network error (to test authError state).
+ */
+export function setupAuthNetworkErrorMock() {
+  const fetchMock = vi.fn(async (input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
+    if (url.includes("/api/auth/me")) {
+      throw new TypeError("Failed to fetch");
+    }
+
+    return new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 interface WrapperOptions {
   route?: string;
   /** Route path pattern for useParams matching, e.g. "/parties/:partyId" */
