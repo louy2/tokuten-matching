@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Profile } from "../../pages/Profile";
-import { renderWithProviders, setupFetchMock } from "./helpers";
+import { renderWithProviders, setupFetchMock, setupAuthFailMock, setupAuthNetworkErrorMock } from "./helpers";
 import type { AuthUser } from "../../shared/types";
 import { CHARACTERS } from "../../shared/characters";
 
@@ -207,6 +207,32 @@ describe("Profile — character preferences", () => {
       expect(body.characterPreferences).not.toContain(1);
       expect(body.characterPreferences).toContain(3);
       expect(body.characterPreferences).toContain(5);
+    });
+  });
+});
+
+describe("Profile — auth error display", () => {
+  it("shows auth error message when /api/auth/me returns server error", async () => {
+    setupAuthFailMock(500);
+    renderWithProviders(<Profile />);
+    await waitFor(() => {
+      expect(screen.getByText(/Auth check failed \(500\)/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows network error message when /api/auth/me throws", async () => {
+    setupAuthNetworkErrorMock();
+    renderWithProviders(<Profile />);
+    await waitFor(() => {
+      expect(screen.getByText("Network error during auth check")).toBeInTheDocument();
+    });
+  });
+
+  it("still shows login button when auth error occurs", async () => {
+    setupAuthFailMock(500);
+    renderWithProviders(<Profile />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Log In" })).toBeInTheDocument();
     });
   });
 });
