@@ -15,6 +15,7 @@ import { buildEventInsert } from "../src/engine/events";
 import { createParty, joinParty } from "../src/engine/parties";
 import { upsertUser } from "../src/engine/users";
 import { authErrorPage } from "./auth-error-page";
+import { redirectWithFallback } from "./redirect-with-fallback";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -33,7 +34,20 @@ app.use("/api/*", async (c, next) => {
     ua: ua.slice(0, 120),
   }));
 
-  await next();
+  try {
+    await next();
+  } catch (err) {
+    const duration = Date.now() - start;
+    console.log(JSON.stringify({
+      event: "request_error",
+      method,
+      path,
+      duration_ms: duration,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    }));
+    throw err;
+  }
 
   const duration = Date.now() - start;
   console.log(JSON.stringify({
@@ -94,13 +108,10 @@ app.get("/api/auth/login", async (c) => {
     state,
   });
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: `https://discord.com/api/oauth2/authorize?${params}`,
-      "Set-Cookie": `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=600`,
-    },
-  });
+  return redirectWithFallback(
+    `https://discord.com/api/oauth2/authorize?${params}`,
+    { cookies: [`oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=600`] },
+  );
 });
 
 app.get("/api/auth/callback", async (c) => {
@@ -217,19 +228,12 @@ app.get("/api/auth/callback", async (c) => {
     ua: (c.req.header("User-Agent") ?? "").slice(0, 120),
   }));
 
-  const response = new Response(null, {
-    status: 302,
-    headers: { Location: "/profile" },
+  return redirectWithFallback("/profile", {
+    cookies: [
+      `session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${60 * 60 * 24 * 30}`,
+      "oauth_state=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0",
+    ],
   });
-  response.headers.append(
-    "Set-Cookie",
-    `session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${60 * 60 * 24 * 30}`,
-  );
-  response.headers.append(
-    "Set-Cookie",
-    "oauth_state=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0",
-  );
-  return response;
 });
 
 app.get("/api/auth/logout", async (c) => {
@@ -240,12 +244,8 @@ app.get("/api/auth/logout", async (c) => {
     await c.env.SESSIONS.delete(`session:${sessionId}`);
   }
 
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: "/",
-      "Set-Cookie": "session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0",
-    },
+  return redirectWithFallback("/", {
+    cookies: ["session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0"],
   });
 });
 
