@@ -185,12 +185,12 @@ describe("Claim State Machine", () => {
   // ── Per-user claim limits ──
 
   describe("per-user claim limits", () => {
-    it("user cannot claim multiple characters in a party (max 1 full claim)", async () => {
+    it("user can claim multiple characters in a party", async () => {
       await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
       const err = await validateClaim(db, PARTY, {
         userId: "alice", characterId: 2, claimType: "claimed",
       });
-      expect(err).toBe("user_already_has_full_claim");
+      expect(err).toBeNull();
     });
 
     it("user can have multiple conditionals across different characters", async () => {

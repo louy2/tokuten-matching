@@ -116,12 +116,12 @@ describe("RECORD — placing full claims", () => {
     expect(err).toBe("character_already_claimed");
   });
 
-  it("rejects second full claim from same user (max 1 per party)", async () => {
+  it("allows second full claim from same user on different character", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
     const err = await validateClaim(db, PARTY, {
       userId: "alice", characterId: 2, claimType: "claimed",
     });
-    expect(err).toBe("user_already_has_full_claim");
+    expect(err).toBeNull();
   });
 
   it("displaces a conditional when someone full-claims via placeClaim", async () => {
