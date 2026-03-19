@@ -140,7 +140,7 @@ describe("CONTESTED via normal claim flow — multiple conditionals allowed", ()
   });
 });
 
-describe("Per-user full claim limit — max 1 full claim per user per party", () => {
+describe("Multi-character claims — user can fully claim multiple characters", () => {
   let db: DrizzleD1Database;
 
   beforeEach(async () => {
@@ -153,14 +153,6 @@ describe("Per-user full claim limit — max 1 full claim per user per party", ()
     await insertMember(db, PARTY, "bob");
   });
 
-  it("rejects second full claim from same user in same party", async () => {
-    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
-    const err = await validateClaim(db, PARTY, {
-      userId: "alice", characterId: 2, claimType: "claimed",
-    });
-    expect(err).toBe("user_already_has_full_claim");
-  });
-
   it("allows first full claim", async () => {
     const err = await validateClaim(db, PARTY, {
       userId: "alice", characterId: 1, claimType: "claimed",
@@ -168,7 +160,32 @@ describe("Per-user full claim limit — max 1 full claim per user per party", ()
     expect(err).toBeNull();
   });
 
-  it("different users can each have one full claim", async () => {
+  it("allows second full claim on a different character", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
+    const err = await validateClaim(db, PARTY, {
+      userId: "alice", characterId: 2, claimType: "claimed",
+    });
+    expect(err).toBeNull();
+  });
+
+  it("user can claim 3+ characters", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
+    await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "alice", claimType: "claimed" });
+    const err = await validateClaim(db, PARTY, {
+      userId: "alice", characterId: 3, claimType: "claimed",
+    });
+    expect(err).toBeNull();
+  });
+
+  it("still rejects claiming same character twice", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
+    const err = await validateClaim(db, PARTY, {
+      userId: "bob", characterId: 1, claimType: "claimed",
+    });
+    expect(err).toBe("character_already_claimed");
+  });
+
+  it("different users can each have full claims on different characters", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
     const err = await validateClaim(db, PARTY, {
       userId: "bob", characterId: 2, claimType: "claimed",
@@ -176,43 +193,70 @@ describe("Per-user full claim limit — max 1 full claim per user per party", ()
     expect(err).toBeNull();
   });
 
-  it("user can have 1 full claim + N conditionals on different characters", async () => {
+  it("user can have full claims + conditionals on different characters", async () => {
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
+    await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "alice", claimType: "claimed" });
 
-    // Conditional on char 2 — should be allowed
-    const err1 = await validateClaim(db, PARTY, {
-      userId: "alice", characterId: 2, claimType: "conditional",
-    });
-    expect(err1).toBeNull();
-
-    // Conditional on char 3 — should also be allowed
-    await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "alice", claimType: "conditional" });
-    const err2 = await validateClaim(db, PARTY, {
-      userId: "alice", characterId: 3, claimType: "conditional",
-    });
-    expect(err2).toBeNull();
-  });
-
-  it("after cancelling full claim, user can claim again", async () => {
-    await placeClaim(db, PARTY, {
-      id: nextId(), userId: "alice", characterId: 1, claimType: "claimed", rank: null,
-    });
-
-    // Cancel it
-    const { cancelClaim } = await import("../claims");
-    await cancelClaim(db, PARTY, "alice", 1, "claimed");
-
-    // Now can claim another character
+    // Conditional on char 3 — should be allowed
     const err = await validateClaim(db, PARTY, {
-      userId: "alice", characterId: 2, claimType: "claimed",
+      userId: "alice", characterId: 3, claimType: "conditional",
     });
     expect(err).toBeNull();
   });
 
-  it("user with full claim in party A can also claim in party B", async () => {
+  it("resolves multiple claimed characters for same user", async () => {
+    await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
+    await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "alice", claimType: "claimed" });
+    await insertClaim(db, { partyId: PARTY, characterId: 3, userId: "alice", claimType: "claimed" });
+
+    const slots = await resolveSlots(db, PARTY);
+    expect(slots[0].state).toBe("claimed");
+    expect(slots[0].claimedBy).toBe("alice");
+    expect(slots[1].state).toBe("claimed");
+    expect(slots[1].claimedBy).toBe("alice");
+    expect(slots[2].state).toBe("claimed");
+    expect(slots[2].claimedBy).toBe("alice");
+  });
+
+  it("cost breakdown reflects multi-character claims correctly", () => {
+    const claims = [
+      { userId: "alice", count: 5 },
+      { userId: "bob", count: 2 },
+      { userId: "carol", count: 0 },
+    ];
+    const breakdown = costBreakdown(12000, claims);
+
+    expect(breakdown.pricePerCard).toBe(1000);
+    expect(breakdown.members.find((m) => m.userId === "alice")!.cost).toBe(5000);
+    expect(breakdown.members.find((m) => m.userId === "bob")!.cost).toBe(2000);
+    expect(breakdown.members.find((m) => m.userId === "carol")!.cost).toBe(0);
+    expect(breakdown.claimedTotal).toBe(7000);
+    expect(breakdown.unallocated).toBe(5000);
+  });
+
+  it("after cancelling one claim, user retains other claims", async () => {
+    await placeClaim(db, PARTY, {
+      id: nextId(), userId: "alice", characterId: 1, claimType: "claimed", rank: null,
+    });
+    await placeClaim(db, PARTY, {
+      id: nextId(), userId: "alice", characterId: 2, claimType: "claimed", rank: null,
+    });
+
+    // Cancel char 1
+    const { cancelClaim } = await import("../claims");
+    await cancelClaim(db, PARTY, "alice", 1, "claimed");
+
+    const slots = await resolveSlots(db, PARTY);
+    expect(slots[0].state).toBe("open");
+    expect(slots[1].state).toBe("claimed");
+    expect(slots[1].claimedBy).toBe("alice");
+  });
+
+  it("user with full claims in party A can also claim in party B", async () => {
     await insertParty(db, { id: "p2", leaderId: "leader" });
     await insertMember(db, "p2", "alice");
     await insertClaim(db, { partyId: PARTY, characterId: 1, userId: "alice", claimType: "claimed" });
+    await insertClaim(db, { partyId: PARTY, characterId: 2, userId: "alice", claimType: "claimed" });
 
     const err = await validateClaim(db, "p2", {
       userId: "alice", characterId: 1, claimType: "claimed",

@@ -14,7 +14,7 @@
  *   CLAIMED    – someone has a full "claimed" on this character
  *
  * Per-user limits:
- *   - At most 1 full claim per user per party
+ *   - Multiple full claims allowed per user per party (one per character)
  *   - Unlimited conditional claims across different characters
  *   - At most 1 conditional per user per character per party
  *
@@ -85,13 +85,8 @@ fact AtMostOneClaimedPerCharacterPerParty {
       c.party = p and c.character = ch and c.claimType = Claimed
 }
 
--- NEW: A user may hold at most one full claim per party.
--- They can have unlimited conditionals across different characters.
-fact AtMostOneClaimedPerUserPerParty {
-  all p : Party, u : User |
-    lone c : CharacterClaim |
-      c.party = p and c.owner = u and c.claimType = Claimed
-}
+-- A user may hold multiple full claims across different characters in a party.
+-- (At most one claimed per *character* is enforced by AtMostOneClaimedPerCharacterPerParty.)
 
 -- NOTE: We deliberately removed AtMostOneConditionalPerCharacterPerParty.
 -- Multiple conditionals on the same character produce a "contested" state
@@ -143,11 +138,15 @@ assert ClaimedExclusivity {
       c.party = p and c.character = ch and c.claimType = Claimed} <= 1
 }
 
--- 3. Per-user claim limit: at most one full claim per user per party
-assert OneClaimedPerUser {
-  all p : Party, u : User |
+-- 3. Multi-character claims: a user can hold multiple full claims (one per character)
+assert MultiCharacterClaimsAllowed {
+  -- This is a "smoke" assertion: the model should allow instances where
+  -- a single user has 2+ full claims on different characters.
+  -- We verify this via ShowMultiClaim below; this assertion simply checks
+  -- that every claimed character has at most one claimer (already a fact).
+  all p : Party, ch : Character |
     #{c : CharacterClaim |
-      c.party = p and c.owner = u and c.claimType = Claimed} <= 1
+      c.party = p and c.character = ch and c.claimType = Claimed} <= 1
 }
 
 -- 4. Displacement invariant: claimed and conditional never coexist on same character
@@ -205,10 +204,17 @@ run ShowExample {
     #{c : CharacterClaim | c.claimType = Conditional and c.character = ch} >= 2
 } for 5 but exactly 1 Party, 4 User, 4 Character, 8 CharacterClaim, 5 Int
 
+-- Show a user with multiple full claims on different characters
+run ShowMultiClaim {
+  #Party = 1
+  some u : User |
+    #{c : CharacterClaim | c.owner = u and c.claimType = Claimed} >= 2
+} for 5 but exactly 1 Party, 3 User, 4 Character, 6 CharacterClaim, 5 Int
+
 -- Check all assertions (5 Int = bitwidth 5, range -16..15, enough for <= 12)
 check NoOrphanClaims               for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check ClaimedExclusivity            for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
-check OneClaimedPerUser             for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
+check MultiCharacterClaimsAllowed   for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check DisplacementInvariant         for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check LeaderMembership              for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int
 check PartySizeBound                for 8 but 3 Party, 6 User, 6 Character, 10 CharacterClaim, 5 Int

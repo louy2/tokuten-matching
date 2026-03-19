@@ -80,7 +80,6 @@ export type ClaimError =
   | "character_already_claimed"
   | "user_already_conditional_this_character"
   | "user_already_prefers_this_character"
-  | "user_already_has_full_claim"
   | "party_locked"
   | "not_a_member"
   | "invalid_character"
@@ -134,11 +133,6 @@ export async function validateClaim(
   if (newClaim.claimType === "claimed") {
     if (forChar.some((c) => c.claimType === "claimed"))
       return "character_already_claimed";
-    // Per-user limit: max 1 full claim per user per party
-    if (existingClaims.some(
-      (c) => c.userId === newClaim.userId && c.claimType === "claimed",
-    ))
-      return "user_already_has_full_claim";
   }
 
   if (newClaim.claimType === "preference") {
