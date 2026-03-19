@@ -93,7 +93,8 @@
     "characterPreferencesHint": "好きなキャラクターを順番に選んでください。パーティーに参加すると自動的に表示されます。",
     "addCharacter": "キャラクターを追加",
     "noPreferencesYet": "まだ推しキャラが設定されていません。上から選んでください。",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "authSlow": "接続に時間がかかっています…ページを再読み込みしてみてください。"
   },
   "slotState": {
     "open": "空き",

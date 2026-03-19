@@ -6,6 +6,7 @@ interface AuthState {
   user: AuthUser | null;
   loading: boolean;
   authError: string | null;
+  authSlow: boolean;
   login: () => void;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
   authError: null,
+  authSlow: false,
   login: () => {},
   logout: async () => {},
   refresh: async () => {},
@@ -24,9 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authSlow, setAuthSlow] = useState(false);
 
   const refresh = useCallback(async () => {
     log.info("Auth refresh started");
+    setAuthSlow(false);
+    const slowTimer = setTimeout(() => {
+      log.warn("Auth check is taking too long");
+      setAuthSlow(true);
+    }, 5000);
     try {
       const res = await fetch("/api/auth/me");
       log.info("Auth /me response", { status: res.status });
@@ -47,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setAuthError("Network error during auth check");
     } finally {
+      clearTimeout(slowTimer);
+      setAuthSlow(false);
       setLoading(false);
     }
   }, []);
@@ -72,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, authError, login, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, authError, authSlow, login, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );
