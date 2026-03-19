@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import "./lib/logger"; // Initialize global error handlers early
 import "./i18n";
 import "./index.css";
@@ -29,6 +29,7 @@ try {
                 <Route path="create-party" element={<CreateParty />} />
                 <Route path="my-parties" element={<MyParties />} />
                 <Route path="profile" element={<Profile />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
             </Routes>
           </BrowserRouter>

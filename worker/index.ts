@@ -541,7 +541,12 @@ app.get("/api/*", (c) => c.json({ error: "Not found" }, 404));
 app.all("/api/*", (c) => c.json({ error: "Method not allowed" }, 405));
 
 // Serve static assets / SPA fallback for all non-API routes
-app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+app.all("*", async (c) => {
+  const res = await c.env.ASSETS.fetch(c.req.raw);
+  if (res.status !== 404) return res;
+  // SPA fallback: serve index.html for client-side routes
+  return c.env.ASSETS.fetch(new URL("/index.html", c.req.url));
+});
 
 // ─── Export ─────────────────────────────────────────────────
 
